@@ -1,0 +1,95 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 657807e2c0beab34b997c36e4ff7e1a0, type: 3}
+  m_Name: DiceCombinationRules
+  m_EditorClassIdentifier: Assembly-CSharp::DiceCombinationRules
+  combinations:
+  - name: Zonk
+    description: None combination listed
+    rule: 0
+    count: 0
+    multiplier: 0
+    points: 0
+  - name: One
+    description: 1 or 5 listed as singular dice
+    rule: 1
+    count: 1
+    multiplier: 1
+    points: 50
+  - name: Pair
+    description: Two dices of the same value
+    rule: 2
+    count: 2
+    multiplier: 1
+    points: 50
+  - name: Two pair
+    description: Two pairs of different values
+    rule: 3
+    count: 3
+    multiplier: 2
+    points: 150
+  - name: Low straight
+    description: Straight with the lenght of 3
+    rule: 4
+    count: 4
+    multiplier: 1.5
+    points: 150
+  - name: Middle straight
+    description: Straight with the length of 4
+    rule: 5
+    count: 5
+    multiplier: 2
+    points: 300
+  - name: Three of a Kind
+    description: Three dice of the same value
+    rule: 6
+    count: 6
+    multiplier: 2
+    points: 100
+  - name: Full House
+    description: 'Three of one value + pair of another
+
+'
+    rule: 7
+    count: 7
+    multiplier: 2.5
+    points: 100
+  - name: Four of kind
+    description: 4 dice's with the same value
+    rule: 8
+    count: 8
+    multiplier: 2
+    points: 50
+  - name: Three pairs
+    description: Three pairs of different values
+    rule: 9
+    count: 9
+    multiplier: 4
+    points: 1000
+  - name: Straight
+    description: Five consecutive numbers
+    rule: 10
+    count: 10
+    multiplier: 5
+    points: 1200
+  - name: Max straight
+    description: Six consecutive numbers
+    rule: 11
+    count: 11
+    multiplier: 6
+    points: 2000
+  - name: Two sets
+    description: Two sets of different values
+    rule: 12
+    count: 12
+    multiplier: 8
+    points: 100
