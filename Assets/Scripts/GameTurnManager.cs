@@ -51,6 +51,12 @@ public class GameTurnManager : MonoBehaviour
         if (uiManager == null) uiManager = FindObjectOfType<ScoreUIManager>();
         if (aiTurnExecutor == null) aiTurnExecutor = FindObjectOfType<AITurnExecutor>();
         
+        // Connect DiceController to AI components
+        if (aiTurnExecutor != null && diceController != null)
+        {
+            aiTurnExecutor.diceController = diceController;
+        }
+        
         // Setup buttons
         if (submitCombinationButton != null)
         {
@@ -81,6 +87,14 @@ public class GameTurnManager : MonoBehaviour
     
     void StartNewTurn()
     {
+        // Don't start new turns if game is over
+        if (IsGameOver())
+        {
+            if (enableDebugLogs)
+                Debug.Log($"Game is over ({GetWinner()} won). Not starting new turn.");
+            return;
+        }
+        
         if (enableDebugLogs)
         {
             string turnType = isAIOpponent ? (isAITurn ? "AI" : "PLAYER") : "PLAYER";
@@ -113,9 +127,9 @@ public class GameTurnManager : MonoBehaviour
         else
         {
             if (enableDebugLogs)
-                Debug.Log($"👤 Starting player turn - rolling dice");
-            // Roll all remaining dice for player turn
-            diceController.RollDiceFromUI();
+                Debug.Log($"👤 Starting player turn - spawning fresh dice");
+            // Always start player turn with fresh 6 dice
+            diceController.SpawnNewDice();
         }
     }
     
@@ -131,6 +145,13 @@ public class GameTurnManager : MonoBehaviour
             waitingForSubmission = true;
             if (submitCombinationButton != null)
                 submitCombinationButton.gameObject.SetActive(true);
+            
+            // Always show end turn button during player's turn (if they have scored at least once)
+            if (!isAIOpponent || !isAITurn)
+            {
+                if (scoreManager.GetCurrentTurnScore() > 0 && endTurnButton != null)
+                    endTurnButton.gameObject.SetActive(true);
+            }
                 
             if (enableDebugLogs)
                 Debug.Log("Valid combinations available! Player can select dice.");
@@ -221,23 +242,9 @@ public class GameTurnManager : MonoBehaviour
         if (remainingDice.Count == 0)
         {
             if (enableDebugLogs)
-                Debug.Log("All dice used! Completing turn and starting fresh.");
+                Debug.Log("All dice used! Spawning fresh dice to continue turn and build higher score.");
             
-            // Complete current turn
-            scoreManager.CompleteTurn();
-            totalScore = scoreManager.totalGameScore;
-            
-            // Update UI
-            if (uiManager != null)
-                uiManager.OnTurnCompleted();
-            
-            // Handle turn switching for AI vs Player mode
-            if (isAIOpponent)
-            {
-                SwitchTurn();
-            }
-            
-            currentTurn++;
+            // Spawn fresh dice to continue the turn (don't end the turn!)
             diceController.SpawnNewDice();
         }
         else
@@ -307,33 +314,40 @@ public class GameTurnManager : MonoBehaviour
         if (isAIOpponent)
         {
             if (enableDebugLogs)
-                Debug.Log($"🔄 About to switch turn (EndTurn). Current: isAITurn={isAITurn}");
+                Debug.Log($"🔄 About to switch turn (Zonk). Current: isAITurn={isAITurn}");
             SwitchTurn();
             if (enableDebugLogs)
-                Debug.Log($"🔄 After switch turn (EndTurn). New: isAITurn={isAITurn}");
-        }
-        
-        // Start next turn
-        currentTurn++;
-        
-        // Check if next turn will be AI turn
-        if (isAIOpponent && isAITurn)
-        {
-            if (enableDebugLogs)
-                Debug.Log($"🤖 Next turn is AI turn {currentTurn} - calling StartNewTurn directly");
-            StartNewTurn();
+                Debug.Log($"🔄 After switch turn (Zonk). New: isAITurn={isAITurn}");
+            
+            // Only increment turn when both players have played
+            if (isAITurn) // We just switched to AI, so this completes the round
+            {
+                currentTurn++;
+                if (enableDebugLogs)
+                    Debug.Log($"🔄 Round complete, incrementing to turn {currentTurn}");
+            }
         }
         else
         {
-            if (enableDebugLogs)
-                Debug.Log($"🎲 About to spawn new dice for turn {currentTurn} (EndTurn)");
-            diceController.SpawnNewDice();
+            // Single player mode - increment turn
+            currentTurn++;
         }
+        
+        StartNewTurn();
     }
     
     public void EndTurn()
     {
-        if (!waitingForTurnChoice) return;
+        // Allow ending turn at any time during player's turn (not just when waitingForTurnChoice)
+        if (isAIOpponent && isAITurn)
+        {
+            if (enableDebugLogs)
+                Debug.Log("Cannot end turn - it's AI's turn!");
+            return;
+        }
+        
+        if (enableDebugLogs)
+            Debug.Log("Player manually ending turn");
         
         // Complete current turn
         scoreManager.CompleteTurn();
@@ -343,6 +357,16 @@ public class GameTurnManager : MonoBehaviour
         if (uiManager != null)
             uiManager.OnTurnCompleted();
         
+        // Reset UI state
+        waitingForSubmission = false;
+        waitingForTurnChoice = false;
+        HideAllButtons();
+        
+        // Clear any remaining dice when ending turn
+        if (enableDebugLogs)
+            Debug.Log("Clearing remaining dice as turn ends");
+        // The dice will be cleared automatically when the next turn starts with SpawnNewDice()
+        
         // Handle turn switching for AI vs Player mode
         if (isAIOpponent)
         {
@@ -351,23 +375,21 @@ public class GameTurnManager : MonoBehaviour
             SwitchTurn();
             if (enableDebugLogs)
                 Debug.Log($"🔄 After switch turn. New: isAITurn={isAITurn}");
-        }
-        
-        currentTurn++;
-        
-        // Check if next turn will be AI turn
-        if (isAIOpponent && isAITurn)
-        {
-            if (enableDebugLogs)
-                Debug.Log($"🤖 Next turn is AI turn {currentTurn} - calling StartNewTurn directly");
-            StartNewTurn();
+            
+            // Only increment turn number when both players have played (after AI turn)
+            if (!isAITurn) // We just switched to AI, so increment turn after AI plays
+            {
+                // Don't increment here, let AI completion handle it
+            }
         }
         else
         {
-            if (enableDebugLogs)
-                Debug.Log($"🎲 About to spawn new dice for turn {currentTurn}");
-            diceController.SpawnNewDice();
+            // Single player mode - increment turn
+            currentTurn++;
         }
+        
+        // Start next turn (AI or new player turn)
+        StartNewTurn();
     }
     
     public void ContinueTurn()
@@ -456,12 +478,19 @@ public class GameTurnManager : MonoBehaviour
         // Disable player UI during AI turn
         HideAllButtons();
         
+        // Clear any existing AI dice from previous turn
+        if (diceController != null)
+        {
+            diceController.ClearAIDice();
+        }
+        
         // Start AI turn execution
         aiTurnExecutor.StartAITurn(currentTurn);
     }
     
     /// <summary>
     /// Switches between player and AI turns
+    /// FIXED: Now gets the final calculated score with multipliers
     /// </summary>
     void SwitchTurn()
     {
@@ -470,32 +499,50 @@ public class GameTurnManager : MonoBehaviour
         if (enableDebugLogs)
             Debug.Log($"🔄 SwitchTurn called! Current: isAITurn={isAITurn}");
         
-        // Complete current turn and update scores
+        // Get the FINAL calculated score (with multipliers) from the last completed turn
         if (enableDebugLogs)
-            Debug.Log($"🔄 About to get turn score from scoreManager");
+            Debug.Log($"🔄 About to get FINAL turn score from scoreManager");
         
         try
         {
-            if (isAITurn)
+            int finalTurnScore = 0;
+            
+            // Get the final score from the most recently completed turn
+            if (scoreManager.turnHistory.Count > 0)
             {
-                // AI turn completed - update AI score
-                int turnScore = scoreManager.GetCurrentTurnScore();
-                aiScore += turnScore;
+                var lastTurn = scoreManager.turnHistory[scoreManager.turnHistory.Count - 1];
+                finalTurnScore = lastTurn.finalScore;
+                
                 if (enableDebugLogs)
-                    Debug.Log($"AI turn completed. Turn Score: {turnScore}, Total AI Score: {aiScore}");
+                    Debug.Log($"🔄 Got final score from turn history: {finalTurnScore} (base: {lastTurn.baseScore}, multiplier: {lastTurn.turnMultiplier:F2}x)");
             }
             else
             {
-                // Player turn completed - update player score
-                int turnScore = scoreManager.GetCurrentTurnScore();
-                playerScore += turnScore;
+                // Fallback: calculate final score if no history available
+                finalTurnScore = scoreManager.GetProjectedFinalScore();
+                
                 if (enableDebugLogs)
-                    Debug.Log($"Player turn completed. Turn Score: {turnScore}, Total Player Score: {playerScore}");
+                    Debug.Log($"🔄 No turn history, using projected final score: {finalTurnScore}");
+            }
+            
+            if (isAITurn)
+            {
+                // AI turn completed - update AI score with FINAL score
+                aiScore += finalTurnScore;
+                if (enableDebugLogs)
+                    Debug.Log($"✅ AI turn completed. Final Turn Score: {finalTurnScore}, Total AI Score: {aiScore}");
+            }
+            else
+            {
+                // Player turn completed - update player score with FINAL score
+                playerScore += finalTurnScore;
+                if (enableDebugLogs)
+                    Debug.Log($"✅ Player turn completed. Final Turn Score: {finalTurnScore}, Total Player Score: {playerScore}");
             }
         }
         catch (System.Exception e)
         {
-            Debug.LogError($"❌ Error getting turn score: {e.Message}");
+            Debug.LogError($"❌ Error getting final turn score: {e.Message}");
             Debug.LogError($"❌ Stack trace: {e.StackTrace}");
             return;
         }
@@ -509,15 +556,14 @@ public class GameTurnManager : MonoBehaviour
         if (enableDebugLogs)
             Debug.Log($"🔄 isAITurn is now: {isAITurn}");
         
-        // Note: Don't reset score manager here - StartNewTurn() will handle it
-        if (enableDebugLogs)
-            Debug.Log($"🔄 Skipping score manager reset - StartNewTurn will handle it");
-        
         if (enableDebugLogs)
         {
             string nextPlayer = isAITurn ? "AI" : "Player";
-            Debug.Log($"✅ Switched to {nextPlayer} turn. Scores - Player: {playerScore}, AI: {aiScore}");
+            Debug.Log($"✅ Switched to {nextPlayer} turn. Final Scores - Player: {playerScore}, AI: {aiScore}");
         }
+        
+        // Check for victory condition (5000 points)
+        CheckForVictory();
     }
     
     /// <summary>
@@ -536,6 +582,27 @@ public class GameTurnManager : MonoBehaviour
     {
         if (!isAIOpponent) return 0;
         return isAITurn ? playerScore : aiScore;
+    }
+    
+    /// <summary>
+    /// Checks if the game is over (someone reached 5000 points)
+    /// </summary>
+    public bool IsGameOver()
+    {
+        if (!isAIOpponent) return false;
+        return playerScore >= 5000 || aiScore >= 5000;
+    }
+    
+    /// <summary>
+    /// Gets the winner (null if game not over)
+    /// </summary>
+    public string GetWinner()
+    {
+        if (!IsGameOver()) return null;
+        
+        if (playerScore >= 5000) return "Player";
+        if (aiScore >= 5000) return "AI";
+        return null;
     }
     
     // ===== AI EVENT HANDLERS =====
@@ -592,6 +659,12 @@ public class GameTurnManager : MonoBehaviour
             uiManager.OnTurnCompleted();
         }
         
+        // Clear AI dice after a delay to let player see final result
+        if (diceController != null)
+        {
+            StartCoroutine(DelayedClearAIDice());
+        }
+        
         // Switch turns and start next turn
         if (isAIOpponent)
         {
@@ -600,9 +673,20 @@ public class GameTurnManager : MonoBehaviour
             SwitchTurn();
             if (enableDebugLogs)
                 Debug.Log($"🔄 After switch turn (AI Complete). New: isAITurn={isAITurn}");
+            
+            // Only increment turn when switching back to player (completing the round)
+            if (!isAITurn) // We just switched to player, so this completes the round
+            {
+                currentTurn++;
+                if (enableDebugLogs)
+                    Debug.Log($"🔄 Round complete, incrementing to turn {currentTurn}");
+            }
         }
-        
-        currentTurn++;
+        else
+        {
+            // Single player mode - increment turn
+            currentTurn++;
+        }
         
         // Start next turn after a brief delay
         StartCoroutine(DelayedNextTurn());
@@ -629,20 +713,31 @@ public class GameTurnManager : MonoBehaviour
     /// </summary>
     System.Collections.IEnumerator DelayedNextTurn()
     {
+        if (enableDebugLogs)
+            Debug.Log($"⏰ DelayedNextTurn started. isAITurn={isAITurn}, currentTurn={currentTurn}");
+        
         yield return new WaitForSeconds(1.5f);
         
-        // Check if next turn will be AI turn
-        if (isAIOpponent && isAITurn)
+        // Always start the new turn first
+        StartNewTurn();
+    }
+    
+    /// <summary>
+    /// Clears AI dice after a delay to let player see the final result
+    /// </summary>
+    System.Collections.IEnumerator DelayedClearAIDice()
+    {
+        if (enableDebugLogs)
+            Debug.Log("Keeping AI dice visible for final review...");
+        
+        // Wait to let player see the final AI dice state
+        yield return new WaitForSeconds(2.0f);
+        
+        if (diceController != null)
         {
+            diceController.ClearAIDice();
             if (enableDebugLogs)
-                Debug.Log($"🤖 Delayed start - AI turn {currentTurn}");
-            StartNewTurn();
-        }
-        else
-        {
-            if (enableDebugLogs)
-                Debug.Log($"🎲 Delayed start - spawning dice for turn {currentTurn}");
-            diceController.SpawnNewDice();
+                Debug.Log("AI dice cleared");
         }
     }
     
@@ -693,6 +788,57 @@ public class GameTurnManager : MonoBehaviour
         if (isAITurn && aiTurnExecutor != null)
         {
             aiTurnExecutor.ForceEndTurn();
+        }
+    }
+    
+    /// <summary>
+    /// Checks if either player has reached 5000 points and ends the game
+    /// </summary>
+    void CheckForVictory()
+    {
+        if (!isAIOpponent) return; // Only check in AI vs Player mode
+        
+        const int VICTORY_SCORE = 5000;
+        
+        if (playerScore >= VICTORY_SCORE)
+        {
+            if (enableDebugLogs)
+                Debug.Log($"🏆 VICTORY: Player wins with {playerScore} points!");
+            
+            // Stop any active AI turn
+            if (isAITurn && aiTurnExecutor != null)
+            {
+                aiTurnExecutor.ForceEndTurn();
+            }
+            
+            // Disable further gameplay
+            waitingForSubmission = false;
+            waitingForTurnChoice = false;
+            HideAllButtons();
+            
+            // Notify UI manager if available
+            if (uiManager != null)
+            {
+                // Could add a victory notification method to ScoreUIManager
+                uiManager.UpdateAllUI();
+            }
+        }
+        else if (aiScore >= VICTORY_SCORE)
+        {
+            if (enableDebugLogs)
+                Debug.Log($"🏆 VICTORY: AI wins with {aiScore} points!");
+            
+            // Disable further gameplay
+            waitingForSubmission = false;
+            waitingForTurnChoice = false;
+            HideAllButtons();
+            
+            // Notify UI manager if available
+            if (uiManager != null)
+            {
+                // Could add a victory notification method to ScoreUIManager
+                uiManager.UpdateAllUI();
+            }
         }
     }
 }

@@ -152,6 +152,10 @@ public class GameManager : MonoBehaviour
     {
         if (turnManager == null) return;
         
+        // Check for victory condition (5000 points)
+        bool playerWon = turnManager.playerScore >= 5000;
+        bool aiWon = turnManager.aiScore >= 5000;
+        
         // Update scores
         if (playerScoreText != null)
             playerScoreText.text = $"Player: {turnManager.playerScore}";
@@ -159,14 +163,44 @@ public class GameManager : MonoBehaviour
         if (aiScoreText != null)
             aiScoreText.text = $"AI: {turnManager.aiScore}";
         
-        // Update current player indicator
+        // Update current player indicator or show victory
         if (currentPlayerText != null)
         {
-            string currentPlayer = turnManager.isAITurn ? "AI Turn" : "Your Turn";
-            currentPlayerText.text = currentPlayer;
-            
-            // Color coding
-            currentPlayerText.color = turnManager.isAITurn ? Color.red : Color.green;
+            if (playerWon)
+            {
+                currentPlayerText.text = "🎉 PLAYER WINS! 🎉";
+                currentPlayerText.color = Color.green;
+                
+                // Stop the game
+                if (gameActive)
+                {
+                    gameActive = false;
+                    if (enableDebugLogs)
+                        Debug.Log($"🏆 GAME OVER: Player wins with {turnManager.playerScore} points!");
+                }
+            }
+            else if (aiWon)
+            {
+                currentPlayerText.text = "🤖 AI WINS! 🤖";
+                currentPlayerText.color = Color.red;
+                
+                // Stop the game
+                if (gameActive)
+                {
+                    gameActive = false;
+                    if (enableDebugLogs)
+                        Debug.Log($"🏆 GAME OVER: AI wins with {turnManager.aiScore} points!");
+                }
+            }
+            else
+            {
+                // Normal turn indicator
+                string currentPlayer = turnManager.isAITurn ? "AI Turn" : "Your Turn";
+                currentPlayerText.text = currentPlayer;
+                
+                // Color coding
+                currentPlayerText.color = turnManager.isAITurn ? Color.red : Color.green;
+            }
         }
         
         // Show/hide AI thinking indicator
@@ -259,5 +293,32 @@ public class GameManager : MonoBehaviour
             Debug.Log($"Restarting game in {currentGameMode} mode");
         
         StartGame(currentGameMode);
+    }
+    
+    /// <summary>
+    /// Checks if either player won and handles victory state
+    /// </summary>
+    public bool CheckForGameVictory()
+    {
+        if (turnManager == null || !IsAIOpponentMode()) return false;
+        
+        bool playerWon = turnManager.playerScore >= 5000;
+        bool aiWon = turnManager.aiScore >= 5000;
+        
+        if (playerWon || aiWon)
+        {
+            gameActive = false;
+            
+            if (enableDebugLogs)
+            {
+                string winner = playerWon ? "Player" : "AI";
+                int winningScore = playerWon ? turnManager.playerScore : turnManager.aiScore;
+                Debug.Log($"🏆 GAME OVER: {winner} wins with {winningScore} points!");
+            }
+            
+            return true;
+        }
+        
+        return false;
     }
 }

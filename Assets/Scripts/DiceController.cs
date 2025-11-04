@@ -12,6 +12,10 @@ public class DiceController : MonoBehaviour
     [Header("Player Area Position")]
     public Vector3 playerAreaOffset = new Vector3(0, 0.1f, 1.0f); // Closest to camera/player
     
+    [Header("AI Area Position")]
+    public Transform aiDiceArea; // Where AI dice spawn
+    public Vector3 aiAreaOffset = new Vector3(0, 0.1f, -1.0f); // Opposite side of table
+    
     [Header("Rolling Settings")]
     public float horizontalForce = 300f;
     public float upwardForce = 200f; // Small upward force for realistic bounce
@@ -34,6 +38,7 @@ public class DiceController : MonoBehaviour
     public bool enableDebugLogs = true;
     
     private List<GameObject> playerDice = new List<GameObject>();
+    private List<GameObject> aiDice = new List<GameObject>();
     private bool isRolling = false;
     private DiceSelector diceSelector;
     public DiceFaceDetector faceDetector;
@@ -49,6 +54,14 @@ public class DiceController : MonoBehaviour
             GameObject area = new GameObject("PlayerDiceArea");
             area.transform.position = playerAreaOffset; // Use configurable offset
             playerDiceArea = area.transform;
+        }
+        
+        // Create AI dice area if not assigned
+        if (aiDiceArea == null)
+        {
+            GameObject aiArea = new GameObject("AIDiceArea");
+            aiArea.transform.position = aiAreaOffset; // Opposite side of table
+            aiDiceArea = aiArea.transform;
         }
         
 
@@ -442,5 +455,231 @@ public class DiceController : MonoBehaviour
         if (enableDebugLogs)
             Debug.Log($"Successfully read {values.Count} dice values: [{string.Join(",", values)}]");
         return values;
+    }
+    
+    // ===== AI DICE METHODS =====
+    
+    /// <summary>
+    /// Spawns AI dice with specific values (no physics, instant placement)
+    /// </summary>
+    public void SpawnAIDice(List<int> diceValues)
+    {
+        StartCoroutine(SpawnAIDiceCoroutine(diceValues));
+    }
+    
+    IEnumerator SpawnAIDiceCoroutine(List<int> diceValues)
+    {
+        if (enableDebugLogs)
+            Debug.Log($"Spawning {diceValues.Count} AI dice with values: [{string.Join(",", diceValues)}]");
+        
+        // Clear existing AI dice
+        ClearAIDice();
+        
+        // Check if we have a dice prefab
+        if (dicePrefab == null)
+        {
+            Debug.LogError("No dice prefab assigned for AI dice!");
+            yield break;
+        }
+        
+        // Spawn dice with specific values
+        for (int i = 0; i < diceValues.Count; i++)
+        {
+            // Position AI dice in a line on their side of the table
+            Vector3 spawnPos = aiDiceArea.position + new Vector3((i - (diceValues.Count - 1) * 0.5f) * 0.4f, alignmentHeight, 0);
+            GameObject newDice = Instantiate(dicePrefab, spawnPos, Quaternion.identity);
+            
+            // Disable physics for AI dice (they don't roll)
+            Rigidbody rb = newDice.GetComponent<Rigidbody>();
+            if (rb != null)
+            {
+                rb.isKinematic = true;
+                rb.constraints = RigidbodyConstraints.FreezeAll;
+            }
+            
+            // Set the dice to show the correct face
+            SetDiceFace(newDice, diceValues[i]);
+            
+            // Add visual indicator that this is an AI dice
+            AddAIDiceVisualIndicator(newDice);
+            
+            aiDice.Add(newDice);
+            
+            if (enableDebugLogs)
+                Debug.Log($"Spawned AI dice {i} with value {diceValues[i]} at position: {spawnPos}");
+        }
+        
+        if (enableDebugLogs)
+            Debug.Log($"AI dice spawning complete. Total: {aiDice.Count}");
+    }
+    
+    /// <summary>
+    /// Sets a dice to show a specific face value
+    /// </summary>
+    void SetDiceFace(GameObject dice, int value)
+    {
+        // Rotate the dice to show the correct face
+        // This assumes standard dice face orientations
+        Quaternion targetRotation = GetRotationForDiceValue(value);
+        dice.transform.rotation = targetRotation;
+        
+        // Store the dice value for later retrieval
+        if (diceValues.ContainsKey(dice))
+            diceValues[dice] = value;
+        else
+            diceValues.Add(dice, value);
+        
+        // Also tag the dice with its value for easy identification
+        dice.name = $"AI_Dice_{value}";
+        
+        if (enableDebugLogs)
+            Debug.Log($"Set dice {dice.name} to show face {value} with rotation {targetRotation.eulerAngles}");
+    }
+    
+    /// <summary>
+    /// Gets the rotation needed to show a specific dice face
+    /// </summary>
+    Quaternion GetRotationForDiceValue(int value)
+    {
+        // Standard dice face rotations (adjust based on your dice model)
+        switch (value)
+        {
+            case 1: return Quaternion.Euler(0, 0, 0);      // Face 1 up
+            case 2: return Quaternion.Euler(90, 0, 0);     // Face 2 up  
+            case 3: return Quaternion.Euler(0, 0, 90);     // Face 3 up
+            case 4: return Quaternion.Euler(0, 0, -90);    // Face 4 up
+            case 5: return Quaternion.Euler(-90, 0, 0);    // Face 5 up
+            case 6: return Quaternion.Euler(180, 0, 0);    // Face 6 up
+            default: return Quaternion.identity;
+        }
+    }
+    
+    /// <summary>
+    /// Adds visual indicator to show this is an AI dice
+    /// </summary>
+    void AddAIDiceVisualIndicator(GameObject dice)
+    {
+        // Add a visual indicator to show this is an AI dice
+        Renderer renderer = dice.GetComponent<Renderer>();
+        if (renderer != null)
+        {
+            // Create a new material instance to avoid affecting other dice
+            Material material = new Material(renderer.material);
+            
+            // Make AI dice red-tinted to distinguish from player dice
+            Color originalColor = material.color;
+            material.color = new Color(1.0f, originalColor.g * 0.7f, originalColor.b * 0.7f, originalColor.a);
+            
+            // Apply the new material
+            renderer.material = material;
+            
+            if (enableDebugLogs)
+                Debug.Log($"Applied AI visual indicator to {dice.name}");
+        }
+        
+        // Add a tag to identify AI dice
+        dice.tag = "AIDice";
+    }
+    
+    /// <summary>
+    /// Removes selected AI dice (when AI uses them in combinations)
+    /// </summary>
+    public void RemoveAIDice(List<int> indices)
+    {
+        if (enableDebugLogs)
+            Debug.Log($"Removing AI dice at indices: [{string.Join(",", indices)}] (AI used these in combination)");
+        
+        // Sort indices in descending order to avoid index shifting issues
+        indices.Sort((a, b) => b.CompareTo(a));
+        
+        foreach (int index in indices)
+        {
+            if (index >= 0 && index < aiDice.Count)
+            {
+                GameObject dice = aiDice[index];
+                
+                // Get the dice value before removing
+                int diceValue = diceValues.ContainsKey(dice) ? diceValues[dice] : 0;
+                
+                // Remove from tracking
+                if (diceValues.ContainsKey(dice))
+                    diceValues.Remove(dice);
+                
+                aiDice.RemoveAt(index);
+                DestroyImmediate(dice);
+                
+                if (enableDebugLogs)
+                    Debug.Log($"✅ Removed AI dice at index {index} (value: {diceValue}) - AI used this in combination");
+            }
+        }
+        
+        if (enableDebugLogs)
+            Debug.Log($"AI dice removal complete. Remaining AI dice: {aiDice.Count}");
+    }
+    
+
+    
+    /// <summary>
+    /// Clears all AI dice from the scene
+    /// </summary>
+    public void ClearAIDice()
+    {
+        foreach (GameObject dice in aiDice)
+        {
+            if (dice != null)
+            {
+                // Remove from dice values dictionary
+                if (diceValues.ContainsKey(dice))
+                    diceValues.Remove(dice);
+                
+                DestroyImmediate(dice);
+            }
+        }
+        aiDice.Clear();
+        
+        if (enableDebugLogs)
+            Debug.Log("Cleared all AI dice");
+    }
+    
+    /// <summary>
+    /// Gets the current AI dice values
+    /// </summary>
+    public List<int> GetAIDiceValues()
+    {
+        List<int> values = new List<int>();
+        
+        for (int i = 0; i < aiDice.Count; i++)
+        {
+            // Since AI dice are set to specific faces, we can determine value from rotation
+            // Or store the values when we create them
+            int value = GetDiceValueFromRotation(aiDice[i]);
+            values.Add(value);
+        }
+        
+        return values;
+    }
+    
+    /// <summary>
+    /// Determines dice value from its rotation
+    /// </summary>
+    int GetDiceValueFromRotation(GameObject dice)
+    {
+        // This is a simplified approach - you might need to adjust based on your dice model
+        Vector3 euler = dice.transform.rotation.eulerAngles;
+        
+        // Normalize angles to 0-360 range
+        float x = ((euler.x % 360) + 360) % 360;
+        float z = ((euler.z % 360) + 360) % 360;
+        
+        // Match rotations to values (adjust based on your dice model)
+        if (Mathf.Approximately(x, 0) && Mathf.Approximately(z, 0)) return 1;
+        if (Mathf.Approximately(x, 90) && Mathf.Approximately(z, 0)) return 2;
+        if (Mathf.Approximately(x, 0) && Mathf.Approximately(z, 90)) return 3;
+        if (Mathf.Approximately(x, 0) && Mathf.Approximately(z, 270)) return 4;
+        if (Mathf.Approximately(x, 270) && Mathf.Approximately(z, 0)) return 5;
+        if (Mathf.Approximately(x, 180) && Mathf.Approximately(z, 0)) return 6;
+        
+        // Fallback
+        return 1;
     }
 }
