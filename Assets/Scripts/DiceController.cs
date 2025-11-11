@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 
 public class DiceController : MonoBehaviour
 {
@@ -500,13 +501,24 @@ public class DiceController : MonoBehaviour
             // Set the dice to show the correct face
             SetDiceFace(newDice, diceValues[i]);
             
+            // Name the dice clearly with its index and value for debugging
+            newDice.name = $"AI_Dice_[{i}]_Value_{diceValues[i]}";
+            
             // Add visual indicator that this is an AI dice
             AddAIDiceVisualIndicator(newDice);
             
             aiDice.Add(newDice);
             
             if (enableDebugLogs)
-                Debug.Log($"Spawned AI dice {i} with value {diceValues[i]} at position: {spawnPos}");
+                Debug.Log($"✅ AI Dice [{i}] = Value {diceValues[i]} | GameObject: {newDice.name} | Position: {spawnPos}");
+        }
+        
+        if (enableDebugLogs)
+        {
+            Debug.Log($"=== AI DICE SPAWN COMPLETE ===");
+            Debug.Log($"Total dice spawned: {aiDice.Count}");
+            Debug.Log($"Dice array: [{string.Join(",", diceValues)}]");
+            Debug.Log($"Visual order (left to right): " + string.Join(", ", diceValues.Select((v, i) => $"[{i}]={v}")));
         }
         
         if (enableDebugLogs)
@@ -529,9 +541,6 @@ public class DiceController : MonoBehaviour
         else
             diceValues.Add(dice, value);
         
-        // Also tag the dice with its value for easy identification
-        dice.name = $"AI_Dice_{value}";
-        
         if (enableDebugLogs)
             Debug.Log($"Set dice {dice.name} to show face {value} with rotation {targetRotation.eulerAngles}");
     }
@@ -541,15 +550,15 @@ public class DiceController : MonoBehaviour
     /// </summary>
     Quaternion GetRotationForDiceValue(int value)
     {
-        // Standard dice face rotations (adjust based on your dice model)
+        // Corrected dice face rotations for this specific dice model
         switch (value)
         {
-            case 1: return Quaternion.Euler(0, 0, 0);      // Face 1 up
-            case 2: return Quaternion.Euler(90, 0, 0);     // Face 2 up  
-            case 3: return Quaternion.Euler(0, 0, 90);     // Face 3 up
-            case 4: return Quaternion.Euler(0, 0, -90);    // Face 4 up
-            case 5: return Quaternion.Euler(-90, 0, 0);    // Face 5 up
-            case 6: return Quaternion.Euler(180, 0, 0);    // Face 6 up
+            case 1: return Quaternion.Euler(0, 0, 0);      // Face 1 up ✅
+            case 2: return Quaternion.Euler(-90, 0, 0);    // Face 2 up (was showing 5)
+            case 3: return Quaternion.Euler(0, 0, -90);    // Face 3 up (was showing 4)
+            case 4: return Quaternion.Euler(0, 0, 90);     // Face 4 up (was showing 3)
+            case 5: return Quaternion.Euler(90, 0, 0);     // Face 5 up (was showing 2)
+            case 6: return Quaternion.Euler(180, 0, 0);    // Face 6 up ✅
             default: return Quaternion.identity;
         }
     }
@@ -587,7 +596,20 @@ public class DiceController : MonoBehaviour
     public void RemoveAIDice(List<int> indices)
     {
         if (enableDebugLogs)
-            Debug.Log($"Removing AI dice at indices: [{string.Join(",", indices)}] (AI used these in combination)");
+        {
+            Debug.Log($"=== REMOVING AI DICE ===");
+            Debug.Log($"Indices to remove: [{string.Join(",", indices)}]");
+            Debug.Log($"Current AI dice count: {aiDice.Count}");
+            
+            // Show what we're about to remove
+            for (int i = 0; i < aiDice.Count; i++)
+            {
+                GameObject dice = aiDice[i];
+                int value = diceValues.ContainsKey(dice) ? diceValues[dice] : 0;
+                string marker = indices.Contains(i) ? "❌ REMOVE" : "✅ KEEP";
+                Debug.Log($"  [{i}] = Value {value} | {dice.name} | {marker}");
+            }
+        }
         
         // Sort indices in descending order to avoid index shifting issues
         indices.Sort((a, b) => b.CompareTo(a));
@@ -598,8 +620,9 @@ public class DiceController : MonoBehaviour
             {
                 GameObject dice = aiDice[index];
                 
-                // Get the dice value before removing
+                // Get the dice value and name BEFORE destroying
                 int diceValue = diceValues.ContainsKey(dice) ? diceValues[dice] : 0;
+                string diceName = dice.name;
                 
                 // Remove from tracking
                 if (diceValues.ContainsKey(dice))
@@ -609,12 +632,23 @@ public class DiceController : MonoBehaviour
                 DestroyImmediate(dice);
                 
                 if (enableDebugLogs)
-                    Debug.Log($"✅ Removed AI dice at index {index} (value: {diceValue}) - AI used this in combination");
+                    Debug.Log($"🗑️ Removed dice at index {index} (value: {diceValue}, name: {diceName})");
             }
         }
         
         if (enableDebugLogs)
-            Debug.Log($"AI dice removal complete. Remaining AI dice: {aiDice.Count}");
+        {
+            Debug.Log($"=== REMOVAL COMPLETE ===");
+            Debug.Log($"Remaining AI dice: {aiDice.Count}");
+            
+            // Show what's left
+            for (int i = 0; i < aiDice.Count; i++)
+            {
+                GameObject dice = aiDice[i];
+                int value = diceValues.ContainsKey(dice) ? diceValues[dice] : 0;
+                Debug.Log($"  Remaining [{i}] = Value {value} | {dice.name}");
+            }
+        }
     }
     
 

@@ -41,6 +41,7 @@ public class CombinationResult
     public int points;
     public string description;
     public float multiplier;
+    public System.Collections.Generic.List<int> diceIndices; // Indices of dice used in this combination
     
     public CombinationResult(Rule ruleType, int score, string desc, float mult = 1f)
     {
@@ -48,5 +49,6 @@ public class CombinationResult
         points = score;
         description = desc;
         multiplier = mult;
+        diceIndices = new System.Collections.Generic.List<int>();
     }
 }

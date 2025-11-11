@@ -13,7 +13,7 @@ public class AIUIIntegration : MonoBehaviour
     [SerializeField] private AITurnFeedbackSystem turnFeedbackSystem;
     [SerializeField] private AIScoreDisplay scoreDisplay;
     [SerializeField] private AIDecisionStatusIndicator statusIndicator;
-    [SerializeField] private AIDiceDisplaySystem diceDisplaySystem;
+    // [SerializeField] private AIDiceDisplaySystem diceDisplaySystem;  // Redundant - using DiceController instead
     
     [Header("Game Components")]
     [SerializeField] private AITurnExecutor aiTurnExecutor;
@@ -91,8 +91,8 @@ public class AIUIIntegration : MonoBehaviour
         if (statusIndicator == null)
             statusIndicator = FindObjectOfType<AIDecisionStatusIndicator>();
         
-        if (diceDisplaySystem == null)
-            diceDisplaySystem = FindObjectOfType<AIDiceDisplaySystem>();
+        // if (diceDisplaySystem == null)
+        //     diceDisplaySystem = FindObjectOfType<AIDiceDisplaySystem>();
         
         // Find game components
         if (aiTurnExecutor == null)
@@ -114,7 +114,7 @@ public class AIUIIntegration : MonoBehaviour
                      $"FeedbackSystem: {turnFeedbackSystem != null}, " +
                      $"ScoreDisplay: {scoreDisplay != null}, " +
                      $"StatusIndicator: {statusIndicator != null}, " +
-                     $"DiceDisplay: {diceDisplaySystem != null}");
+                     $"DiceDisplay: N/A (using DiceController)");
         }
     }
     
@@ -126,7 +126,7 @@ public class AIUIIntegration : MonoBehaviour
         if (turnFeedbackSystem != null) activeUIComponents++;
         if (scoreDisplay != null) activeUIComponents++;
         if (statusIndicator != null) activeUIComponents++;
-        if (diceDisplaySystem != null) activeUIComponents++;
+        // if (diceDisplaySystem != null) activeUIComponents++;
         
         if (activeUIComponents == 0)
         {

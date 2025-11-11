@@ -296,7 +296,6 @@ MonoBehaviour:
   aiTurnProgressSlider: {fileID: 0}
   aiDiceContainer: {fileID: 0}
   aiDicePrefab: {fileID: 0}
-  diceDisplaySystem: {fileID: 0}
   aiCombinationText: {fileID: 0}
   aiRiskAssessmentText: {fileID: 0}
   aiMomentumText: {fileID: 0}
@@ -1152,11 +1151,11 @@ MonoBehaviour:
   dualProbabilityCapSystem: {fileID: 2129209271}
   scoreManager: {fileID: 1948512353}
   combinationDetector: {fileID: 1948512349}
-  diceController: {fileID: 0}
+  diceController: {fileID: 1948512347}
   aiConfig:
-    PointsCapAggressive: 500
-    PointsCapPassive: 250
-    StateBufferThreshold: 100
+    PointsCapAggressive: 2500
+    PointsCapPassive: 800
+    StateBufferThreshold: 300
     InitialBufferCap: 200
     BufferReductionPerRound: 20
     RoundsPerReduction: 3
@@ -1658,7 +1657,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 807831314}
-  - component: {fileID: 807831315}
   m_Layer: 0
   m_Name: AI_ConfigUI
   m_TagString: Untagged
@@ -1681,49 +1679,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 267353352}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &807831315
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 807831313}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 189339007b2a84d458574a14e08fc8d3, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::AIConfigurationUI
-  mainConfigPanel: {fileID: 0}
-  difficultyPanel: {fileID: 0}
-  advancedPanel: {fileID: 0}
-  easyDifficultyButton: {fileID: 0}
-  mediumDifficultyButton: {fileID: 0}
-  hardDifficultyButton: {fileID: 0}
-  customDifficultyButton: {fileID: 0}
-  currentDifficultyLabel: {fileID: 0}
-  aggressivenessSlider: {fileID: 0}
-  riskToleranceSlider: {fileID: 0}
-  speedSlider: {fileID: 0}
-  aggressivenessLabel: {fileID: 0}
-  riskToleranceLabel: {fileID: 0}
-  speedLabel: {fileID: 0}
-  pointsCapAggressiveSlider: {fileID: 0}
-  pointsCapPassiveSlider: {fileID: 0}
-  bufferCapSlider: {fileID: 0}
-  momentumReductionSlider: {fileID: 0}
-  pointsCapAggressiveLabel: {fileID: 0}
-  pointsCapPassiveLabel: {fileID: 0}
-  bufferCapLabel: {fileID: 0}
-  momentumReductionLabel: {fileID: 0}
-  applyButton: {fileID: 0}
-  resetButton: {fileID: 0}
-  closeButton: {fileID: 0}
-  showAdvancedButton: {fileID: 0}
-  hideAdvancedButton: {fileID: 0}
-  difficultyManager: {fileID: 0}
-  configManager: {fileID: 0}
-  autoApplyChanges: 1
-  showAdvancedByDefault: 0
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -3270,10 +3225,20 @@ MonoBehaviour:
   diceSpacing: 60
   updateAnimationSpeed: 2
   enableInstantUpdates: 1
-  aiDiceColor: {r: 0, g: 1, b: 1, a: 1}
-  playerDiceColor: {r: 1, g: 1, b: 1, a: 1}
+  aiDiceColor:
+    r: 0
+    g: 1
+    b: 1
+    a: 1
+  playerDiceColor:
+    r: 1
+    g: 1
+    b: 1
+    a: 1
   aiDicePrefix: 'AI: '
   enableDebugLogs: 0
+  currentDiceDisplays: []
+  currentDiceValues: 
 --- !u!114 &1716438503
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3291,6 +3256,7 @@ MonoBehaviour:
   maxDiceCount: 6
   autoDisplayGenerated: 1
   enableDebugLogs: 0
+  currentAIDice: 
 --- !u!4 &1716438504
 Transform:
   m_ObjectHideFlags: 0
@@ -3704,7 +3670,7 @@ MonoBehaviour:
   torqueVariation: 0.3
   alignmentSpeed: 2
   alignmentHeight: 0.2
-  enableDebugLogs: 0
+  enableDebugLogs: 1
   faceDetector: {fileID: 1948512351}
 --- !u!114 &1948512348
 MonoBehaviour:
@@ -3949,6 +3915,7 @@ MonoBehaviour:
   currentRerollState:
     TotalIterations: 0
     MaxIterationsAllowed: 0
+    TotalSelections: 0
     TotalPointsScored: 0
     PointsPerTurnCap: 0
     RemainingDiceCount: 0

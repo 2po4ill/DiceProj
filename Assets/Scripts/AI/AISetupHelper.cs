@@ -63,10 +63,10 @@ public class AISetupHelper : MonoBehaviour
     {
         GameObject diceSystem = new GameObject("AI_DiceSystem");
         diceSystem.AddComponent<AIDiceGenerator>();
-        diceSystem.AddComponent<AIDiceManager>();
-        diceSystem.AddComponent<AIDiceDisplaySystem>();
+        // diceSystem.AddComponent<AIDiceManager>();  // Redundant - disabled
+        // diceSystem.AddComponent<AIDiceDisplaySystem>();  // Redundant - disabled
         
-        Debug.Log("Created AI_DiceSystem with dice components");
+        Debug.Log("Created AI_DiceSystem with dice generator (using DiceController for display)");
     }
     
     private void CreateConfigurationGameObject()

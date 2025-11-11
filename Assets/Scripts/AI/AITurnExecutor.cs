@@ -791,18 +791,29 @@ public class AITurnExecutor : MonoBehaviour
         List<int> indices = new List<int>();
         List<int> currentDice = new List<int>(currentTurnState.CurrentDice);
         
-        if (enableDebugLogs)
-            Debug.Log($"Finding dice for combination: {combination.rule} from dice: [{string.Join(",", currentDice)}]");
+        // CRITICAL DEBUG: Show what array we're actually searching
+        Debug.Log($"🔍 GetDiceIndicesForCombination: Combination={combination.rule}, Points={combination.points}");
+        Debug.Log($"🔍 Internal dice array: [{string.Join(",", currentDice)}]");
+        Debug.Log($"🔍 Looking for dice to match this combination...");
         
         // Identify specific dice based on combination type
         switch (combination.rule)
         {
             case Rule.One:
-                // Single 1 or 5 - determine which based on dice values
-                if (currentDice.Contains(1))
+                // Single 1 or 5 - determine which based on points
+                // Single 1 = 100 points, Single 5 = 50 points
+                if (combination.points == 100)
                     indices.AddRange(FindDiceWithValue(currentDice, 1, 1));
-                else if (currentDice.Contains(5))
+                else if (combination.points == 50)
                     indices.AddRange(FindDiceWithValue(currentDice, 5, 1));
+                else
+                {
+                    // Fallback: check what's available
+                    if (currentDice.Contains(1))
+                        indices.AddRange(FindDiceWithValue(currentDice, 1, 1));
+                    else if (currentDice.Contains(5))
+                        indices.AddRange(FindDiceWithValue(currentDice, 5, 1));
+                }
                 break;
             case Rule.ThreeOfKind:
                 indices.AddRange(FindThreeOfAKindDice(currentDice));
@@ -1077,15 +1088,27 @@ public class AITurnExecutor : MonoBehaviour
                 // Show combination selection
                 yield return new WaitForSeconds(1.5f);
                 
-                // Simulate dice removal (we don't have exact indices from aggressive result)
-                if (diceController != null && iteration.RemainingDice < iteration.InitialDice.Count)
+                // Remove dice using actual indices from the combination
+                if (diceController != null && iteration.DiceIndicesUsed != null && iteration.DiceIndicesUsed.Count > 0)
                 {
-                    // Remove some dice to show selection
+                    if (enableDebugLogs)
+                    {
+                        Debug.Log($"Removing dice at indices: [{string.Join(",", iteration.DiceIndicesUsed)}]");
+                    }
+                    diceController.RemoveAIDice(iteration.DiceIndicesUsed);
+                }
+                else if (diceController != null && iteration.RemainingDice < iteration.InitialDice.Count)
+                {
+                    // Fallback: remove from start if indices not available
                     int diceToRemove = iteration.InitialDice.Count - iteration.RemainingDice;
                     List<int> indicesToRemove = new List<int>();
                     for (int j = 0; j < diceToRemove; j++)
                     {
                         indicesToRemove.Add(j);
+                    }
+                    if (enableDebugLogs)
+                    {
+                        Debug.LogWarning($"No dice indices available, using fallback removal: [{string.Join(",", indicesToRemove)}]");
                     }
                     diceController.RemoveAIDice(indicesToRemove);
                 }

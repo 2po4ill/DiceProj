@@ -32,8 +32,9 @@ public class AIAggressiveRerollStrategy : MonoBehaviour
     [System.Serializable]
     public class AggressiveRerollState
     {
-        public int TotalIterations;
-        public int MaxIterationsAllowed;
+        public int TotalIterations; // Number of hot streaks (full 6-dice clears)
+        public int MaxIterationsAllowed; // Max hot streaks allowed (5)
+        public int TotalSelections; // Total number of dice selections made
         public int TotalPointsScored;
         public int PointsPerTurnCap;
         public int RemainingDiceCount;
@@ -44,6 +45,7 @@ public class AIAggressiveRerollStrategy : MonoBehaviour
         {
             TotalIterations = 0;
             MaxIterationsAllowed = 5;
+            TotalSelections = 0;
             TotalPointsScored = 0;
             PointsPerTurnCap = 500;
             RemainingDiceCount = 6;
@@ -53,24 +55,27 @@ public class AIAggressiveRerollStrategy : MonoBehaviour
     }
     
     /// <summary>
-    /// Record of a single reroll iteration
+    /// Record of a single dice selection (not a full iteration)
     /// </summary>
     [System.Serializable]
     public class RerollIteration
     {
-        public int IterationNumber;
+        public int IterationNumber; // Which hot streak cycle (1-5)
+        public int SelectionNumber; // Which selection within this cycle
         public List<int> InitialDice;
         public CombinationResult SelectedCombination;
+        public List<int> DiceIndicesUsed; // Actual indices of dice that were selected
         public int DiceUsed;
         public int RemainingDice;
         public int PointsGained;
         public string SelectionReason;
         public bool ContinueDecision;
         public string DecisionReason;
+        public bool IsHotStreak; // True if this selection cleared all dice
         
         public override string ToString()
         {
-            return $"Iter {IterationNumber}: {SelectedCombination?.rule} ({DiceUsed} dice, {PointsGained} pts) -> {RemainingDice} remaining";
+            return $"Iter {IterationNumber}.{SelectionNumber}: {SelectedCombination?.rule} ({DiceUsed} dice, {PointsGained} pts) -> {RemainingDice} remaining";
         }
     }
     
@@ -110,12 +115,13 @@ public class AIAggressiveRerollStrategy : MonoBehaviour
         
         // Execute iterative rerolling
         List<int> currentDice = new List<int>(initialDice);
+        currentRerollState.TotalIterations = 1; // Start at iteration 1 (first set of 6 dice)
         
         while (ShouldContinueRerolling(currentDice, result))
         {
-            var iteration = ExecuteRerollIteration(currentDice, result);
+            var selection = ExecuteRerollIteration(currentDice, result);
             
-            if (iteration == null || iteration.SelectedCombination == null)
+            if (selection == null || selection.SelectedCombination == null)
             {
                 // No valid combination found (Zonk)
                 result.ZonkOccurred = true;
@@ -123,29 +129,32 @@ public class AIAggressiveRerollStrategy : MonoBehaviour
                 break;
             }
             
-            // Process the iteration
-            ProcessRerollIteration(iteration, result);
+            // Process the selection
+            ProcessRerollIteration(selection, result);
             
             // Check for hot streak (all dice used)
-            if (iteration.RemainingDice == 0)
+            if (selection.RemainingDice == 0)
             {
+                selection.IsHotStreak = true;
+                currentRerollState.TotalIterations++; // Increment iteration on hot streak
+                
                 if (enableDebugLogs)
-                    Debug.Log("Hot streak! All dice used - generating new full set");
+                    Debug.Log($"Hot streak! All dice used - starting iteration {currentRerollState.TotalIterations}");
+                
+                // Check iteration limit BEFORE generating new dice
+                if (currentRerollState.TotalIterations > currentRerollState.MaxIterationsAllowed)
+                {
+                    result.FinalReason = $"Iteration limit reached ({currentRerollState.MaxIterationsAllowed} hot streaks)";
+                    break;
+                }
                 
                 currentDice = GenerateNewDiceSet(6);
                 result.HotStreakCount++;
             }
             else
             {
-                // Generate new dice for remaining positions
-                currentDice = GenerateNewDiceSet(iteration.RemainingDice);
-            }
-            
-            // Check iteration limit
-            if (currentRerollState.TotalIterations >= currentRerollState.MaxIterationsAllowed)
-            {
-                result.FinalReason = $"Iteration limit reached ({currentRerollState.MaxIterationsAllowed})";
-                break;
+                // Generate new dice for remaining positions (same iteration)
+                currentDice = GenerateNewDiceSet(selection.RemainingDice);
             }
         }
         
@@ -161,21 +170,23 @@ public class AIAggressiveRerollStrategy : MonoBehaviour
     }
     
     /// <summary>
-    /// Executes a single reroll iteration with minimum dice selection
+    /// Executes a single dice selection with minimum dice strategy
     /// </summary>
     RerollIteration ExecuteRerollIteration(List<int> currentDice, AggressiveRerollResult result)
     {
-        currentRerollState.TotalIterations++;
+        currentRerollState.TotalSelections++;
         
-        var iteration = new RerollIteration
+        var selection = new RerollIteration
         {
             IterationNumber = currentRerollState.TotalIterations,
-            InitialDice = new List<int>(currentDice)
+            SelectionNumber = currentRerollState.TotalSelections,
+            InitialDice = new List<int>(currentDice),
+            IsHotStreak = false
         };
         
         if (enableDebugLogs)
         {
-            Debug.Log($"--- Aggressive Reroll Iteration {iteration.IterationNumber} ---");
+            Debug.Log($"--- Aggressive Selection {selection.IterationNumber}.{selection.SelectionNumber} ---");
             Debug.Log($"Current Dice: [{string.Join(",", currentDice)}]");
         }
         
@@ -189,26 +200,28 @@ public class AIAggressiveRerollStrategy : MonoBehaviour
             return null;
         }
         
-        // Fill iteration details
-        iteration.SelectedCombination = selectedCombination;
-        iteration.DiceUsed = GetDiceUsedForCombination(selectedCombination.rule);
-        iteration.RemainingDice = currentDice.Count - iteration.DiceUsed;
-        iteration.PointsGained = selectedCombination.points;
-        iteration.SelectionReason = GenerateSelectionReason(selectedCombination, currentDice.Count);
+        // Fill selection details
+        selection.SelectedCombination = selectedCombination;
+        selection.DiceIndicesUsed = selectedCombination.diceIndices != null ? 
+            new List<int>(selectedCombination.diceIndices) : new List<int>();
+        selection.DiceUsed = GetDiceUsedForCombination(selectedCombination.rule);
+        selection.RemainingDice = currentDice.Count - selection.DiceUsed;
+        selection.PointsGained = selectedCombination.points;
+        selection.SelectionReason = GenerateSelectionReason(selectedCombination, currentDice.Count);
         
         // Make continue/stop decision
-        var continueDecision = MakeContinueDecision(iteration, result);
-        iteration.ContinueDecision = continueDecision.ShouldContinue;
-        iteration.DecisionReason = continueDecision.Reason;
+        var continueDecision = MakeContinueDecision(selection, result);
+        selection.ContinueDecision = continueDecision.ShouldContinue;
+        selection.DecisionReason = continueDecision.Reason;
         
         if (showRerollDetails)
         {
-            Debug.Log($"Selected: {selectedCombination.rule} ({iteration.DiceUsed} dice, {iteration.PointsGained} pts)");
-            Debug.Log($"Remaining: {iteration.RemainingDice} dice");
-            Debug.Log($"Decision: {(iteration.ContinueDecision ? "CONTINUE" : "STOP")} - {iteration.DecisionReason}");
+            Debug.Log($"Selected: {selectedCombination.rule} ({selection.DiceUsed} dice, {selection.PointsGained} pts)");
+            Debug.Log($"Remaining: {selection.RemainingDice} dice");
+            Debug.Log($"Decision: {(selection.ContinueDecision ? "CONTINUE" : "STOP")} - {selection.DecisionReason}");
         }
         
-        return iteration;
+        return selection;
     }
     
     /// <summary>
@@ -283,34 +296,36 @@ public class AIAggressiveRerollStrategy : MonoBehaviour
     }
     
     /// <summary>
-    /// Makes continue/stop decision for current iteration
+    /// Makes continue/stop decision for current selection
     /// </summary>
-    ContinueDecision MakeContinueDecision(RerollIteration iteration, AggressiveRerollResult result)
+    ContinueDecision MakeContinueDecision(RerollIteration selection, AggressiveRerollResult result)
     {
         var decision = new ContinueDecision();
         
         // Update turn state for decision making
-        int projectedTurnScore = currentRerollState.TotalPointsScored + iteration.PointsGained;
+        int projectedTurnScore = currentRerollState.TotalPointsScored + selection.PointsGained;
         
-        // Check hard stops first
-        if (currentRerollState.TotalIterations >= currentRerollState.MaxIterationsAllowed)
+        // ALWAYS CONTINUE on iteration 1 (first set of 6 dice)
+        if (currentRerollState.TotalIterations == 1)
         {
-            decision.ShouldContinue = false;
-            decision.Reason = $"Iteration limit reached ({currentRerollState.MaxIterationsAllowed})";
+            decision.ShouldContinue = true;
+            decision.Reason = "Iteration 1 - always continue with initial dice";
             return decision;
         }
         
-        if (iteration.RemainingDice <= 0)
+        // Hot streak check - always continue if all dice used
+        if (selection.RemainingDice <= 0)
         {
-            decision.ShouldContinue = true; // Hot streak - always continue
+            decision.ShouldContinue = true;
             decision.Reason = "Hot streak - all dice used, continuing with new set";
             return decision;
         }
         
         // Use dual probability system for decision
+        // NOTE: Pass TotalIterations (hot streak count) not selection count
         var stopDecision = riskCalculator.CalculateStopDecision(
-            currentRerollState.TotalIterations,
-            iteration.RemainingDice,
+            currentRerollState.TotalIterations, // Hot streak count, not selection count
+            selection.RemainingDice,
             currentRerollState.SelectedCombinations.Count,
             projectedTurnScore,
             currentRerollState.PointsPerTurnCap,
@@ -447,22 +462,23 @@ public class AIAggressiveRerollStrategy : MonoBehaviour
     {
         Debug.Log($"=== AGGRESSIVE REROLL STRATEGY COMPLETE ===");
         Debug.Log($"Execution Time: {result.ExecutionTime.TotalMilliseconds:F1}ms");
-        Debug.Log($"Total Iterations: {result.Iterations.Count}");
+        Debug.Log($"Total Selections: {result.Iterations.Count}");
+        Debug.Log($"Total Hot Streaks: {result.HotStreakCount}");
         Debug.Log($"Total Points Scored: {result.TotalPointsScored}");
         Debug.Log($"Total Combinations: {result.TotalCombinations}");
-        Debug.Log($"Hot Streaks: {result.HotStreakCount}");
         Debug.Log($"Final Reason: {result.FinalReason}");
         
         if (result.Iterations.Count > 0)
         {
-            Debug.Log($"Average Points/Iteration: {result.AveragePointsPerIteration:F1}");
-            Debug.Log($"Average Dice Used/Iteration: {result.AverageDiceUsedPerIteration:F1}");
+            Debug.Log($"Average Points/Selection: {result.AveragePointsPerIteration:F1}");
+            Debug.Log($"Average Dice Used/Selection: {result.AverageDiceUsedPerIteration:F1}");
         }
         
-        Debug.Log("Iteration Details:");
-        foreach (var iteration in result.Iterations)
+        Debug.Log("Selection Details:");
+        foreach (var selection in result.Iterations)
         {
-            Debug.Log($"  {iteration}");
+            string hotStreakMarker = selection.IsHotStreak ? " 🔥 HOT STREAK" : "";
+            Debug.Log($"  {selection}{hotStreakMarker}");
         }
     }
     

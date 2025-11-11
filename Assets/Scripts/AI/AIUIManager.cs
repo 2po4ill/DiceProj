@@ -25,7 +25,7 @@ public class AIUIManager : MonoBehaviour
     [Header("AI Dice Display")]
     [SerializeField] private Transform aiDiceContainer;
     [SerializeField] private GameObject aiDicePrefab;
-    [SerializeField] private AIDiceDisplaySystem diceDisplaySystem;
+    // [SerializeField] private AIDiceDisplaySystem diceDisplaySystem;  // Redundant - using DiceController
     
     [Header("AI Decision Feedback")]
     [SerializeField] private TextMeshProUGUI aiCombinationText;
@@ -96,17 +96,17 @@ public class AIUIManager : MonoBehaviour
         if (scoreManager == null)
             scoreManager = FindObjectOfType<TurnScoreManager>();
         
-        // Initialize dice display system
-        if (diceDisplaySystem == null)
-            diceDisplaySystem = GetComponent<AIDiceDisplaySystem>();
+        // Initialize dice display system - DISABLED (using DiceController instead)
+        // if (diceDisplaySystem == null)
+        //     diceDisplaySystem = GetComponent<AIDiceDisplaySystem>();
         
-        if (diceDisplaySystem == null && aiDiceContainer != null)
-        {
-            diceDisplaySystem = gameObject.AddComponent<AIDiceDisplaySystem>();
-            diceDisplaySystem.SetAIDiceContainer(aiDiceContainer);
-            if (aiDicePrefab != null)
-                diceDisplaySystem.SetAIDicePrefab(aiDicePrefab);
-        }
+        // if (diceDisplaySystem == null && aiDiceContainer != null)
+        // {
+        //     diceDisplaySystem = gameObject.AddComponent<AIDiceDisplaySystem>();
+        //     diceDisplaySystem.SetAIDiceContainer(aiDiceContainer);
+        if (aiDicePrefab != null)
+        //         diceDisplaySystem.SetAIDicePrefab(aiDicePrefab);
+        // }
         
         if (enableDebugLogs)
         {
@@ -161,11 +161,11 @@ public class AIUIManager : MonoBehaviour
         UpdateTurnStatusDisplay("AI Turn Active", turnState.IterationCount, turnState.MaxIterations);
         UpdateTurnProgressDisplay(turnState);
         
-        // Display initial dice
-        if (diceDisplaySystem != null && turnState.CurrentDice != null)
-        {
-            diceDisplaySystem.DisplayAIDice(turnState.CurrentDice);
-        }
+        // Display initial dice - DISABLED (DiceController handles this)
+        // if (diceDisplaySystem != null && turnState.CurrentDice != null)
+        // {
+        //     diceDisplaySystem.DisplayAIDice(turnState.CurrentDice);
+        // }
         
         if (enableDebugLogs)
         {
@@ -188,11 +188,11 @@ public class AIUIManager : MonoBehaviour
             UpdateTurnProgressDisplay(currentTurnState);
         }
         
-        // Update dice display to show remaining dice
-        if (diceDisplaySystem != null && currentTurnState?.CurrentDice != null)
-        {
-            diceDisplaySystem.UpdateRemainingDice(currentTurnState.CurrentDice);
-        }
+        // Update dice display to show remaining dice - DISABLED (DiceController handles this)
+        // if (diceDisplaySystem != null && currentTurnState?.CurrentDice != null)
+        // {
+        //     diceDisplaySystem.UpdateRemainingDice(currentTurnState.CurrentDice);
+        // }
         
         if (enableDebugLogs)
         {
@@ -235,11 +235,11 @@ public class AIUIManager : MonoBehaviour
         // Final score update
         UpdateTurnScoreDisplay(turnState.CurrentTurnScore);
         
-        // Clear dice display after a delay
-        if (diceDisplaySystem != null)
-        {
-            StartCoroutine(ClearDiceDisplayDelayed(2f));
-        }
+        // Clear dice display after a delay - DISABLED (DiceController handles this)
+        // if (diceDisplaySystem != null)
+        // {
+        //     StartCoroutine(ClearDiceDisplayDelayed(2f));
+        // }
         
         if (enableDebugLogs)
         {
@@ -553,8 +553,8 @@ public class AIUIManager : MonoBehaviour
     System.Collections.IEnumerator ClearDiceDisplayDelayed(float delay)
     {
         yield return new WaitForSeconds(delay);
-        if (diceDisplaySystem != null)
-            diceDisplaySystem.ClearAIDiceDisplay();
+        // if (diceDisplaySystem != null)
+        //     diceDisplaySystem.ClearAIDiceDisplay();
     }
     
     #endregion
