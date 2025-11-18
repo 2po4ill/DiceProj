@@ -124,7 +124,9 @@ public class AIAggressiveRerollStrategy : MonoBehaviour
             if (selection == null || selection.SelectedCombination == null)
             {
                 // No valid combination found (Zonk)
+                // Store the dice that caused the zonk
                 result.ZonkOccurred = true;
+                result.ZonkDice = new List<int>(currentDice);
                 result.FinalReason = "Zonk - no valid combinations found";
                 break;
             }
@@ -225,20 +227,37 @@ public class AIAggressiveRerollStrategy : MonoBehaviour
     }
     
     /// <summary>
-    /// Selects combination using minimum dice algorithm for aggressive strategy
+    /// Selects combination using two-phase aggressive strategy:
+    /// Phase 1 (4-6 dice): Accumulate points (aim for 500+ total)
+    /// Phase 2 (1-3 dice): Full clear mode (try to use all dice)
     /// </summary>
     CombinationResult SelectMinimumDiceCombination(List<int> diceValues)
     {
         if (diceValues == null || diceValues.Count == 0)
             return null;
         
-        // Use combination strategy to find minimum dice combination
+        int diceCount = diceValues.Count;
+        int currentScore = currentRerollState.TotalPointsScored;
+        
+        // PHASE 1: Accumulation (4-6 dice) - Build up to 500+ points
+        if (diceCount >= 4 && currentScore < 500)
+        {
+            if (enableDebugLogs)
+                Debug.Log($"Phase 1 (Accumulation): {diceCount} dice, {currentScore} pts - seeking high-value combinations");
+            
+            return SelectAccumulationCombination(diceValues);
+        }
+        
+        // PHASE 2: Full Clear (1-3 dice OR 500+ points reached) - Try to clear all dice
+        if (enableDebugLogs)
+            Debug.Log($"Phase 2 (Full Clear): {diceCount} dice, {currentScore} pts - prioritizing hot streaks");
+        
+        // Use standard minimum dice strategy (already prioritizes hot streaks)
         var strategyResult = combinationStrategy.FindMinimumDiceCombination(diceValues, BehaviorMode.AGGRESSIVE);
         
         if (strategyResult == null)
             return null;
         
-        // Apply aggressive-specific selection criteria
         var combination = strategyResult.combination;
         
         // Validate combination meets aggressive criteria
@@ -251,12 +270,44 @@ public class AIAggressiveRerollStrategy : MonoBehaviour
         var allCombinations = combinationStrategy.FindAllValidCombinations(diceValues);
         if (allCombinations.Count > 0)
         {
-            // Select combination with best points-per-dice ratio
             return allCombinations.OrderByDescending(c => 
                 GetDiceUsedForCombination(c.rule) > 0 ? (float)c.points / GetDiceUsedForCombination(c.rule) : 0f).First();
         }
         
         return null;
+    }
+    
+    /// <summary>
+    /// Selects combination for accumulation phase - prioritizes high points over minimum dice
+    /// </summary>
+    CombinationResult SelectAccumulationCombination(List<int> diceValues)
+    {
+        var allCombinations = combinationStrategy.FindAllValidCombinations(diceValues);
+        
+        if (allCombinations.Count == 0)
+            return null;
+        
+        // Filter to combinations worth 200+ points (meaningful accumulation)
+        var highValueCombos = allCombinations.Where(c => c.points >= 200).ToList();
+        
+        if (highValueCombos.Count > 0)
+        {
+            // Select highest point combination (not minimum dice!)
+            var bestCombo = highValueCombos.OrderByDescending(c => c.points).First();
+            
+            if (enableDebugLogs)
+                Debug.Log($"Accumulation: Selected {bestCombo.rule} for {bestCombo.points} pts (high value strategy)");
+            
+            return bestCombo;
+        }
+        
+        // No high-value combos available, fall back to best available
+        var fallbackCombo = allCombinations.OrderByDescending(c => c.points).First();
+        
+        if (enableDebugLogs)
+            Debug.Log($"Accumulation: No high-value combos, taking {fallbackCombo.rule} for {fallbackCombo.points} pts");
+        
+        return fallbackCombo;
     }
     
     /// <summary>
@@ -389,18 +440,45 @@ public class AIAggressiveRerollStrategy : MonoBehaviour
     }
     
     /// <summary>
-    /// Generates new dice set for rerolling
+    /// Generates new dice set for rerolling with aggressive mode advantage
+    /// When dice count is low (< 4), gives 90% chance for one die to be 1 or 5
     /// </summary>
     List<int> GenerateNewDiceSet(int count)
     {
         var newDice = new List<int>();
+        
+        // Aggressive mode advantage: Help AI when in risky situation (< 4 dice)
+        bool shouldApplyAdvantage = count < 4 && count > 0;
+        bool advantageApplied = false;
+        
         for (int i = 0; i < count; i++)
         {
-            newDice.Add(Random.Range(1, 7));
+            int value;
+            
+            // Apply advantage to ONE random die (90% chance to be 1 or 5)
+            if (shouldApplyAdvantage && !advantageApplied && Random.Range(0f, 1f) < 0.9f)
+            {
+                // 90% chance: Make this die a 1 or 5
+                value = Random.Range(0, 2) == 0 ? 1 : 5;
+                advantageApplied = true;
+                
+                if (enableDebugLogs)
+                    Debug.Log($"Aggressive advantage applied: Die {i} set to {value}");
+            }
+            else
+            {
+                // Normal random die
+                value = Random.Range(1, 7);
+            }
+            
+            newDice.Add(value);
         }
         
         if (enableDebugLogs)
-            Debug.Log($"Generated {count} new dice: [{string.Join(",", newDice)}]");
+        {
+            string advantageNote = advantageApplied ? " (advantage applied)" : "";
+            Debug.Log($"Generated {count} new dice: [{string.Join(",", newDice)}]{advantageNote}");
+        }
         
         return newDice;
     }
@@ -629,6 +707,7 @@ public class AggressiveRerollResult
     public bool IterationLimitReached = false;
     public bool CapEnforcementTriggered = false;
     public bool ZonkOccurred = false;
+    public List<int> ZonkDice = new List<int>(); // The dice that caused the zonk
     public float AveragePointsPerIteration = 0f;
     public float AverageDiceUsedPerIteration = 0f;
 }

@@ -15,6 +15,13 @@ namespace HybridEnemyAI
         [SerializeField] private bool enableDebugLogs = false;
         [SerializeField] private bool validateDistribution = true;
         
+        [Header("Rigged Probability (AI Safety Net)")]
+        [Tooltip("Enable rigged dice when AI has 1-4 dice remaining")]
+        [SerializeField] private bool enableRiggedDice = true;
+        [Tooltip("Probability that ONE dice will be 1 or 5 when rigging is active (0.9 = 90%)")]
+        [Range(0f, 1f)]
+        [SerializeField] private float riggedSafetyProbability = 0.9f;
+        
         [Header("Distribution Validation")]
         [SerializeField] private int validationSampleSize = 10000;
         [SerializeField] private float acceptableVariance = 0.05f; // 5% variance from expected 1/6
@@ -30,6 +37,7 @@ namespace HybridEnemyAI
         
         /// <summary>
         /// Generate random dice values instantly without physics
+        /// Applies rigged probability when count is 1-4 (AI safety net)
         /// </summary>
         /// <param name="count">Number of dice to generate</param>
         /// <returns>List of dice values (1-6)</returns>
@@ -44,19 +52,53 @@ namespace HybridEnemyAI
             
             List<int> diceValues = new List<int>();
             
-            for (int i = 0; i < count; i++)
+            // RIGGED PROBABILITY: When 1-4 dice, guarantee at least one 1 or 5 (90% chance)
+            bool shouldRig = enableRiggedDice && count >= 1 && count <= 4;
+            bool rigApplied = false;
+            
+            if (shouldRig && Random.Range(0f, 1f) < riggedSafetyProbability)
             {
-                // Generate random value 1-6 with equal probability
-                int value = Random.Range(1, 7);
-                diceValues.Add(value);
+                // Pick a random position to place the safety dice
+                int safetyPosition = Random.Range(0, count);
                 
-                // Track for validation
-                UpdateGenerationStats(value);
+                for (int i = 0; i < count; i++)
+                {
+                    int value;
+                    
+                    if (i == safetyPosition && !rigApplied)
+                    {
+                        // Place a 1 or 5 at this position (50/50 chance)
+                        value = Random.Range(0, 2) == 0 ? 1 : 5;
+                        rigApplied = true;
+                        
+                        if (enableDebugLogs)
+                            Debug.Log($"AIDiceGenerator: RIGGED - Placed safety dice ({value}) at position {i}");
+                    }
+                    else
+                    {
+                        // Normal random dice
+                        value = Random.Range(1, 7);
+                    }
+                    
+                    diceValues.Add(value);
+                    UpdateGenerationStats(value);
+                }
+            }
+            else
+            {
+                // Normal generation (no rigging or rigging failed)
+                for (int i = 0; i < count; i++)
+                {
+                    int value = Random.Range(1, 7);
+                    diceValues.Add(value);
+                    UpdateGenerationStats(value);
+                }
             }
             
             if (enableDebugLogs)
             {
-                Debug.Log($"AIDiceGenerator: Generated {count} dice: [{string.Join(", ", diceValues)}]");
+                string rigStatus = shouldRig ? (rigApplied ? " [RIGGED]" : " [RIG FAILED]") : "";
+                Debug.Log($"AIDiceGenerator: Generated {count} dice: [{string.Join(", ", diceValues)}]{rigStatus}");
             }
             
             return diceValues;

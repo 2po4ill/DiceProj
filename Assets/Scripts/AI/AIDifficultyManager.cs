@@ -11,6 +11,10 @@ public class AIDifficultyManager : MonoBehaviour
     [Header("Difficulty Presets")]
     public AIDifficultyLevel currentDifficulty = AIDifficultyLevel.Medium;
     
+    [Header("Auto-Apply Settings")]
+    [Tooltip("If FALSE, will NOT overwrite your custom config on Start. Set to TRUE only if using difficulty presets.")]
+    public bool autoApplyDifficultyOnStart = false;
+    
     [Header("UI References")]
     public GameObject difficultySelectionPanel;
     public Button easyButton;
@@ -47,7 +51,17 @@ public class AIDifficultyManager : MonoBehaviour
     {
         InitializeComponents();
         SetupUI();
-        ApplyCurrentDifficulty();
+        
+        // Only auto-apply if enabled (prevents overwriting custom configs)
+        if (autoApplyDifficultyOnStart)
+        {
+            ApplyCurrentDifficulty();
+            Debug.Log($"AIDifficultyManager: Auto-applied {currentDifficulty} difficulty preset");
+        }
+        else
+        {
+            Debug.Log("AIDifficultyManager: Auto-apply disabled - using existing config from AIGameStateAnalyzer");
+        }
     }
     
     void InitializeComponents()

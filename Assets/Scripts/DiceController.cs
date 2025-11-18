@@ -654,6 +654,28 @@ public class DiceController : MonoBehaviour
 
     
     /// <summary>
+    /// Clears all player dice from the scene
+    /// </summary>
+    public void ClearPlayerDice()
+    {
+        foreach (GameObject dice in playerDice)
+        {
+            if (dice != null)
+            {
+                // Remove from dice values dictionary
+                if (diceValues.ContainsKey(dice))
+                    diceValues.Remove(dice);
+                
+                DestroyImmediate(dice);
+            }
+        }
+        playerDice.Clear();
+        
+        if (enableDebugLogs)
+            Debug.Log("Cleared all player dice");
+    }
+    
+    /// <summary>
     /// Clears all AI dice from the scene
     /// </summary>
     public void ClearAIDice()

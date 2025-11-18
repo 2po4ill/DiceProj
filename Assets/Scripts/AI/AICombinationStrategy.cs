@@ -11,6 +11,7 @@ public class AICombinationStrategy : MonoBehaviour
 {
     [Header("Dependencies")]
     public DiceCombinationDetector combinationDetector;
+    public DiceCombinationRules combinationRules; // Use same rules as player
     
     [Header("Strategy Configuration")]
     public AIConfiguration config;
@@ -91,6 +92,27 @@ public class AICombinationStrategy : MonoBehaviour
             }
         }
         
+        // Get combination rules from detector (same as player uses)
+        if (combinationRules == null && combinationDetector != null)
+        {
+            combinationRules = combinationDetector.combinationRules;
+        }
+        
+        // Fallback: try to find rules in scene
+        if (combinationRules == null)
+        {
+            var detector = FindObjectOfType<DiceCombinationDetector>();
+            if (detector != null && detector.combinationRules != null)
+            {
+                combinationRules = detector.combinationRules;
+            }
+        }
+        
+        if (combinationRules == null)
+        {
+            Debug.LogWarning("AICombinationStrategy: No DiceCombinationRules found! AI will use hardcoded values.");
+        }
+        
         if (config == null)
         {
             config = new AIConfiguration();
@@ -100,7 +122,87 @@ public class AICombinationStrategy : MonoBehaviour
     }
     
     /// <summary>
+    /// Calculates points for a combination using the ScriptableObject rules (same as player)
+    /// </summary>
+    int CalculatePointsFromSO(Rule ruleType, List<int> diceValues, int specificValue = 0)
+    {
+        if (combinationRules == null)
+        {
+            // Fallback to hardcoded if SO not available
+            return CalculatePointsFallback(ruleType, diceValues, specificValue);
+        }
+        
+        var rule = combinationRules.GetRule(ruleType);
+        if (rule == null)
+        {
+            if (enableDebugLogs)
+                Debug.LogWarning($"AICombinationStrategy: No rule found for {ruleType}, using fallback");
+            return CalculatePointsFallback(ruleType, diceValues, specificValue);
+        }
+        
+        // Use same calculation logic as DiceCombinationDetector
+        // Note: If specificValue > 0, it means this is "of a kind" (not a straight)
+        // MaxStraight with specificValue means "six of a kind", not a straight
+        if (ruleType == Rule.MaxStraight && specificValue > 0)
+        {
+            // This is actually "six of a kind" - use value-based calculation
+            // Since SO doesn't have a "six of a kind" rule, calculate based on pattern
+            // Six of a kind: value * 1000 (or special case for 1s)
+            return specificValue == 1 ? 4000 : specificValue * 1000;
+        }
+        
+        switch (rule.count)
+        {
+            case Count.ThreeOfKind:
+                return Mathf.RoundToInt(specificValue * rule.points * rule.multiplier);
+            case Count.FourOfKind:
+                return Mathf.RoundToInt(specificValue * rule.points * rule.multiplier);
+            case Count.Pair:
+                return Mathf.RoundToInt(specificValue * rule.points * rule.multiplier);
+            case Count.One:
+                return Mathf.RoundToInt((specificValue == 1 ? 100 : rule.points) * rule.multiplier);
+            case Count.TwoPair:
+            case Count.LowStraight:
+            case Count.MiddleStraight:
+            case Count.Straight:
+            case Count.MaxStraight: // Only for actual straights (when specificValue == 0)
+            case Count.ThreePairs:
+                return Mathf.RoundToInt(rule.points * rule.multiplier);
+            case Count.FullHouse:
+                var counts = diceValues.GroupBy(x => x).ToDictionary(g => g.Key, g => g.Count());
+                int threeValue = counts.First(kvp => kvp.Value >= 3).Key;
+                return Mathf.RoundToInt((rule.points * threeValue + 50) * rule.multiplier);
+            default:
+                return Mathf.RoundToInt(rule.points * rule.multiplier);
+        }
+    }
+    
+    /// <summary>
+    /// Fallback calculation if SO is not available (uses old hardcoded values)
+    /// </summary>
+    int CalculatePointsFallback(Rule ruleType, List<int> diceValues, int specificValue)
+    {
+        // Old hardcoded logic as fallback
+        switch (ruleType)
+        {
+            case Rule.ThreeOfKind:
+                return specificValue * 100 * 2;
+            case Rule.FourOfKind:
+                return specificValue == 1 ? 2000 : specificValue * 200;
+            case Rule.Pair:
+                return specificValue == 1 ? 200 : specificValue * 20;
+            case Rule.One:
+                return specificValue == 1 ? 100 : 50;
+            case Rule.TwoPair:
+                return 500;
+            default:
+                return 0;
+        }
+    }
+    
+    /// <summary>
     /// Evaluates all possible combinations and returns the best strategic choice
+    /// Minimal risk strategy (single dice) only applies when 1-3 dice remain
     /// </summary>
     public StrategyResult EvaluateBestStrategy(List<int> diceValues, BehaviorMode mode, int remainingDice)
     {
@@ -122,8 +224,24 @@ public class AICombinationStrategy : MonoBehaviour
             return null;
         }
         
-        // Select best combination based on strategy
-        StrategyResult bestStrategy = SelectBestCombination(allCombinations, mode);
+        // MINIMAL RISK STRATEGY: Only apply when dice count is 1-3 (high risk situation)
+        // Otherwise, always go for best combinations to maximize points
+        StrategyResult bestStrategy;
+        
+        if (remainingDice <= 3 && mode == BehaviorMode.AGGRESSIVE)
+        {
+            // Low dice count - use minimal risk strategy (single dice if available)
+            bestStrategy = SelectMinimumDiceStrategy(allCombinations);
+            if (enableDebugLogs)
+                Debug.Log($"AICombinationStrategy: Using MINIMAL RISK strategy ({remainingDice} dice remaining)");
+        }
+        else
+        {
+            // Normal dice count (4-6) - go for best combinations
+            bestStrategy = SelectBestCombination(allCombinations, mode);
+            if (enableDebugLogs)
+                Debug.Log($"AICombinationStrategy: Using BEST COMBINATION strategy ({remainingDice} dice remaining)");
+        }
         
         if (enableDebugLogs)
         {
@@ -142,13 +260,51 @@ public class AICombinationStrategy : MonoBehaviour
     {
         List<StrategyResult> combinations = new List<StrategyResult>();
         
-        // Check each possible combination type
+        // Check each possible combination type (order matters - check high value first!)
         combinations.AddRange(FindStraightCombinations(diceValues, threshold));
+        combinations.AddRange(FindFullHouseCombination(diceValues, threshold));
         combinations.AddRange(FindOfAKindCombinations(diceValues, threshold));
         combinations.AddRange(FindPairCombinations(diceValues, threshold));
         combinations.AddRange(FindSingleCombinations(diceValues, threshold));
         
         return combinations;
+    }
+    
+    /// <summary>
+    /// Finds Full House combination (three of a kind + pair)
+    /// </summary>
+    List<StrategyResult> FindFullHouseCombination(List<int> diceValues, float threshold)
+    {
+        List<StrategyResult> fullHouses = new List<StrategyResult>();
+        
+        var counts = diceValues.GroupBy(x => x).ToDictionary(g => g.Key, g => g.Count());
+        
+        // Need at least one value with 3+ and another with 2+
+        var threeOfKind = counts.Where(kvp => kvp.Value >= 3).ToList();
+        var pairs = counts.Where(kvp => kvp.Value >= 2).ToList();
+        
+        if (threeOfKind.Count > 0 && pairs.Count >= 2)
+        {
+            // Full House found!
+            int threeValue = threeOfKind.First().Key;
+            int pairValue = pairs.First(p => p.Key != threeValue).Key;
+            
+            // Calculate points using SO rules (same as player)
+            int totalPoints = CalculatePointsFromSO(Rule.FullHouse, diceValues, threeValue);
+            
+            var result = CreateStrategyResult(Rule.FullHouse, totalPoints, CombinationTier.Tier1, 5, threshold, 
+                $"Full House: Three {threeValue}s + Pair of {pairValue}s");
+            
+            // Find indices for the full house
+            List<int> indices = new List<int>();
+            indices.AddRange(FindValueIndices(diceValues, threeValue, 3));
+            indices.AddRange(FindValueIndices(diceValues, pairValue, 2));
+            result.combination.diceIndices = indices;
+            
+            fullHouses.Add(result);
+        }
+        
+        return fullHouses;
     }
     
     /// <summary>
@@ -161,7 +317,8 @@ public class AICombinationStrategy : MonoBehaviour
         // Check for large straight (1,2,3,4,5,6) - Tier 1
         if (HasLargeStraight(diceValues))
         {
-            var result = CreateStrategyResult(Rule.MaxStraight, 1500, CombinationTier.Tier1, 6, threshold, "Large Straight");
+            int points = CalculatePointsFromSO(Rule.MaxStraight, diceValues);
+            var result = CreateStrategyResult(Rule.MaxStraight, points, CombinationTier.Tier1, 6, threshold, "Large Straight");
             result.combination.diceIndices = FindStraightIndices(diceValues, new List<int> { 1, 2, 3, 4, 5, 6 });
             straights.Add(result);
         }
@@ -169,7 +326,8 @@ public class AICombinationStrategy : MonoBehaviour
         // Check for middle straight (any 5 consecutive) - Tier 2
         if (HasMiddleStraight(diceValues))
         {
-            var result = CreateStrategyResult(Rule.Straight, 1000, CombinationTier.Tier2, 5, threshold, "Middle Straight");
+            int points = CalculatePointsFromSO(Rule.Straight, diceValues);
+            var result = CreateStrategyResult(Rule.Straight, points, CombinationTier.Tier2, 5, threshold, "Middle Straight");
             result.combination.diceIndices = FindAnyStraightIndices(diceValues, 5);
             straights.Add(result);
         }
@@ -177,7 +335,8 @@ public class AICombinationStrategy : MonoBehaviour
         // Check for small straight (any 4 consecutive) - Tier 2
         if (HasSmallStraight(diceValues))
         {
-            var result = CreateStrategyResult(Rule.MiddleStraight, 500, CombinationTier.Tier2, 4, threshold, "Small Straight");
+            int points = CalculatePointsFromSO(Rule.MiddleStraight, diceValues);
+            var result = CreateStrategyResult(Rule.MiddleStraight, points, CombinationTier.Tier2, 4, threshold, "Small Straight");
             result.combination.diceIndices = FindAnyStraightIndices(diceValues, 4);
             straights.Add(result);
         }
@@ -185,7 +344,8 @@ public class AICombinationStrategy : MonoBehaviour
         // Check for low straight (any 3 consecutive) - Tier 4
         if (HasLowStraight(diceValues))
         {
-            var result = CreateStrategyResult(Rule.LowStraight, 250, CombinationTier.Tier4, 3, threshold, "Low Straight");
+            int points = CalculatePointsFromSO(Rule.LowStraight, diceValues);
+            var result = CreateStrategyResult(Rule.LowStraight, points, CombinationTier.Tier4, 3, threshold, "Low Straight");
             result.combination.diceIndices = FindAnyStraightIndices(diceValues, 3);
             straights.Add(result);
         }
@@ -210,7 +370,7 @@ public class AICombinationStrategy : MonoBehaviour
             // Six of a kind - Tier 1
             if (count >= 6)
             {
-                int points = value == 1 ? 4000 : value * 1000;
+                int points = CalculatePointsFromSO(Rule.MaxStraight, diceValues, value);
                 var result = CreateStrategyResult(Rule.MaxStraight, points, CombinationTier.Tier1, 6, threshold, $"Six {value}s");
                 result.combination.diceIndices = FindValueIndices(diceValues, value, 6);
                 ofAKind.Add(result);
@@ -218,7 +378,7 @@ public class AICombinationStrategy : MonoBehaviour
             // Four of a kind - Tier 2
             else if (count >= 4)
             {
-                int points = value == 1 ? 2000 : value * 200;
+                int points = CalculatePointsFromSO(Rule.FourOfKind, diceValues, value);
                 var result = CreateStrategyResult(Rule.FourOfKind, points, CombinationTier.Tier2, 4, threshold, $"Four {value}s");
                 result.combination.diceIndices = FindValueIndices(diceValues, value, 4);
                 ofAKind.Add(result);
@@ -226,7 +386,7 @@ public class AICombinationStrategy : MonoBehaviour
             // Three of a kind - Tier 3
             else if (count >= 3)
             {
-                int points = value == 1 ? 1000 : value * 100;
+                int points = CalculatePointsFromSO(Rule.ThreeOfKind, diceValues, value);
                 var result = CreateStrategyResult(Rule.ThreeOfKind, points, CombinationTier.Tier3, 3, threshold, $"Three {value}s");
                 result.combination.diceIndices = FindValueIndices(diceValues, value, 3);
                 ofAKind.Add(result);
@@ -248,7 +408,8 @@ public class AICombinationStrategy : MonoBehaviour
         // Three pairs - Tier 1
         if (counts.Count >= 3)
         {
-            var result = CreateStrategyResult(Rule.ThreePairs, 1500, CombinationTier.Tier1, 6, threshold, "Three Pairs");
+            int points = CalculatePointsFromSO(Rule.ThreePairs, diceValues);
+            var result = CreateStrategyResult(Rule.ThreePairs, points, CombinationTier.Tier1, 6, threshold, "Three Pairs");
             // Find indices for all three pairs
             List<int> indices = new List<int>();
             foreach (var group in counts.Take(3))
@@ -261,7 +422,8 @@ public class AICombinationStrategy : MonoBehaviour
         // Two pairs - Tier 3
         else if (counts.Count >= 2)
         {
-            var result = CreateStrategyResult(Rule.TwoPair, 500, CombinationTier.Tier3, 4, threshold, "Two Pairs");
+            int points = CalculatePointsFromSO(Rule.TwoPair, diceValues);
+            var result = CreateStrategyResult(Rule.TwoPair, points, CombinationTier.Tier3, 4, threshold, "Two Pairs");
             // Find indices for both pairs
             List<int> indices = new List<int>();
             foreach (var group in counts.Take(2))
@@ -275,7 +437,7 @@ public class AICombinationStrategy : MonoBehaviour
         else if (counts.Count >= 1)
         {
             int value = counts.First().Key;
-            int points = value == 1 ? 200 : value * 20;
+            int points = CalculatePointsFromSO(Rule.Pair, diceValues, value);
             var result = CreateStrategyResult(Rule.Pair, points, CombinationTier.Tier4, 2, threshold, $"Pair of {value}s");
             result.combination.diceIndices = FindValueIndices(diceValues, value, 2);
             pairs.Add(result);
@@ -296,18 +458,20 @@ public class AICombinationStrategy : MonoBehaviour
         int fives = diceValues.Count(x => x == 5);
         
         // For minimum dice strategy, prefer single 1 over single 5
-        // Single 1 - Tier 5 (100 points)
+        // Single 1 - Tier 5
         if (ones > 0)
         {
-            var result = CreateStrategyResult(Rule.One, 100, CombinationTier.Tier5, 1, threshold, "Single One");
+            int points = CalculatePointsFromSO(Rule.One, diceValues, 1);
+            var result = CreateStrategyResult(Rule.One, points, CombinationTier.Tier5, 1, threshold, "Single One");
             result.combination.diceIndices = FindValueIndices(diceValues, 1, 1);
             singles.Add(result);
         }
         
-        // Single 5 - Tier 5 (50 points)
+        // Single 5 - Tier 5
         if (fives > 0)
         {
-            var result = CreateStrategyResult(Rule.One, 50, CombinationTier.Tier5, 1, threshold, "Single Five");
+            int points = CalculatePointsFromSO(Rule.One, diceValues, 5);
+            var result = CreateStrategyResult(Rule.One, points, CombinationTier.Tier5, 1, threshold, "Single Five");
             result.combination.diceIndices = FindValueIndices(diceValues, 5, 1);
             singles.Add(result);
         }
@@ -345,22 +509,28 @@ public class AICombinationStrategy : MonoBehaviour
         }
         else
         {
-            // No combinations meet threshold - use minimum dice strategy
-            return SelectMinimumDiceStrategy(combinations);
+            // No combinations meet threshold - but still prioritize best combinations
+            // Only use minimum dice strategy in low dice situations (handled elsewhere)
+            return SelectByStrategy(combinations, mode);
         }
     }
     
     /// <summary>
     /// Selects combination based on behavior mode strategy
+    /// AGGRESSIVE: Prioritizes hot streaks (all dice), then highest points
+    /// PASSIVE: Prioritizes efficiency (points per dice)
     /// </summary>
     StrategyResult SelectByStrategy(List<StrategyResult> combinations, BehaviorMode mode)
     {
         switch (mode)
         {
             case BehaviorMode.AGGRESSIVE:
-                // Prioritize highest tier, then highest points
+                // Priority 1: Hot streak potential (combinations that use ALL remaining dice)
+                // Priority 2: Highest tier (better combinations)
+                // Priority 3: Highest points
                 return combinations
-                    .OrderBy(c => (int)c.tier)
+                    .OrderByDescending(c => c.strategicValue) // Hot streaks have boosted value from ApplyDiceCountWeighting
+                    .ThenBy(c => (int)c.tier)
                     .ThenByDescending(c => c.combination.points)
                     .First();
                 
@@ -783,6 +953,8 @@ public class AICombinationStrategy : MonoBehaviour
     
     /// <summary>
     /// Selects optimal combination based on AI behavior mode and current state
+    /// MINIMAL RISK: Only when 1-3 dice LEFT on board (not combination size)
+    /// Otherwise: MAXIMIZE POINTS with best combinations
     /// </summary>
     public CombinationResult SelectOptimalCombination(List<CombinationResult> combinations, 
                                                      BehaviorMode mode, int remainingDice, int iteration)
@@ -806,8 +978,40 @@ public class AICombinationStrategy : MonoBehaviour
             strategies.Add(strategy);
         }
         
-        // Select best strategy
-        var bestStrategy = SelectBestCombination(strategies, mode);
+        // Apply hot streak weighting for aggressive mode (boosts combinations that use all dice)
+        if (mode == BehaviorMode.AGGRESSIVE && remainingDice > 3)
+        {
+            ApplyDiceCountWeighting(strategies, remainingDice, mode);
+        }
+        
+        StrategyResult bestStrategy;
+        
+        // DECISION LOGIC: Based on how many dice are LEFT on the board
+        // ONLY use minimal risk in AGGRESSIVE mode with 1-3 dice
+        if (mode == BehaviorMode.AGGRESSIVE && remainingDice <= 3)
+        {
+            // MINIMAL RISK MODE: 1-3 dice left on board in aggressive mode
+            // Select single dice (1 or 5) to preserve points and minimize zonk risk
+            bestStrategy = SelectMinimumDiceStrategy(strategies);
+        }
+        else
+        {
+            // MAXIMIZE POINTS MODE: 4-6 dice left on board
+            // Filter OUT single dice combinations - we want multi-dice combos
+            var multiDiceStrategies = strategies.Where(s => s.diceUsed > 1).ToList();
+            
+            if (multiDiceStrategies.Count > 0)
+            {
+                // Select best multi-dice combination
+                bestStrategy = SelectBestCombination(multiDiceStrategies, mode);
+            }
+            else
+            {
+                // Fallback: only single dice available (e.g., [1, 6, 6, 6, 6])
+                bestStrategy = SelectBestCombination(strategies, mode);
+            }
+        }
+        
         return bestStrategy?.combination;
     }
     

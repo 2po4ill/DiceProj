@@ -68,7 +68,11 @@ public class DiceSelector : MonoBehaviour
     
     bool IsDice(GameObject obj)
     {
-        // Check if object is a dice - you can modify this logic
+        // Check if object is a dice - exclude arrows
+        if (obj.name.Contains("_Arrow"))
+            return false;
+        
+        // Check if it's actually a dice
         return obj.name.Contains("Dice") || obj.GetComponent<Rigidbody>() != null;
     }
     
@@ -191,6 +195,13 @@ public class DiceSelector : MonoBehaviour
         arrow.transform.position = dice.transform.position + arrowOffset;
         arrow.transform.rotation = Quaternion.Euler(arrowRotation);
         arrow.transform.parent = dice.transform.parent;
+        
+        // Make arrow non-clickable by removing colliders
+        Collider[] arrowColliders = arrow.GetComponentsInChildren<Collider>();
+        foreach (Collider col in arrowColliders)
+        {
+            Destroy(col);
+        }
         
         // Store reference
         arrowObjects[dice] = arrow;

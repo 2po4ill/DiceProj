@@ -67,8 +67,8 @@ MonoBehaviour:
     description: 4 dice's with the same value
     rule: 8
     count: 8
-    multiplier: 2
-    points: 50
+    multiplier: 3
+    points: 100
   - name: Three pairs
     description: Three pairs of different values
     rule: 9

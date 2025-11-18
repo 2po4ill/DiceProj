@@ -30,6 +30,10 @@ public class GameTurnManager : MonoBehaviour
     public int playerScore = 0;
     public int aiScore = 0;
     
+    [Header("Game Rules")]
+    [Tooltip("Score needed to win the game (first player to reach this score wins)")]
+    public int victoryScore = 5000;
+    
     [Header("UI")]
     public UnityEngine.UI.Button endTurnButton;
     public UnityEngine.UI.Button continueTurnButton;
@@ -85,7 +89,7 @@ public class GameTurnManager : MonoBehaviour
         StartNewTurn();
     }
     
-    void StartNewTurn()
+    public void StartNewTurn()
     {
         // Don't start new turns if game is over
         if (IsGameOver())
@@ -143,15 +147,17 @@ public class GameTurnManager : MonoBehaviour
         if (HasValidCombinations())
         {
             waitingForSubmission = true;
+            
+            // SELECTION PHASE: Only show submit button
+            // Player must select and submit a combination first
             if (submitCombinationButton != null)
                 submitCombinationButton.gameObject.SetActive(true);
             
-            // Always show end turn button during player's turn (if they have scored at least once)
-            if (!isAIOpponent || !isAITurn)
-            {
-                if (scoreManager.GetCurrentTurnScore() > 0 && endTurnButton != null)
-                    endTurnButton.gameObject.SetActive(true);
-            }
+            // Do NOT show end turn button here - only after submission
+            if (endTurnButton != null)
+                endTurnButton.gameObject.SetActive(false);
+            if (continueTurnButton != null)
+                continueTurnButton.gameObject.SetActive(false);
                 
             if (enableDebugLogs)
                 Debug.Log("Valid combinations available! Player can select dice.");
@@ -172,12 +178,20 @@ public class GameTurnManager : MonoBehaviour
             return;
         }
         
+        // Disable selection during submission processing
+        if (diceSelector != null)
+            diceSelector.DisableSelection();
+        
         List<GameObject> selectedDice = diceSelector.GetSelectedDice();
         
         if (selectedDice.Count == 0)
         {
             if (enableDebugLogs)
                 Debug.Log("No dice selected! Please select dice to form a combination.");
+            
+            // Re-enable selection so player can try again
+            if (diceSelector != null)
+                diceSelector.EnableSelection();
             return;
         }
         
@@ -197,6 +211,13 @@ public class GameTurnManager : MonoBehaviour
         {
             if (enableDebugLogs)
                 Debug.Log("Error reading dice values! Try again.");
+            
+            // Clear selections and re-enable so player can try again
+            if (diceSelector != null)
+            {
+                diceSelector.ClearAllSelections();
+                diceSelector.EnableSelection();
+            }
             return;
         }
         
@@ -206,7 +227,14 @@ public class GameTurnManager : MonoBehaviour
         if (result == null)
         {
             if (enableDebugLogs)
-                Debug.Log($"Selected dice [{string.Join(",", selectedValues)}] do not form a valid combination!");
+                Debug.Log($"❌ Selected dice [{string.Join(",", selectedValues)}] do not form a valid combination!");
+            
+            // Clear invalid selections and re-enable so player can try again
+            if (diceSelector != null)
+            {
+                diceSelector.ClearAllSelections();
+                diceSelector.EnableSelection();
+            }
             return;
         }
         
@@ -242,9 +270,10 @@ public class GameTurnManager : MonoBehaviour
         if (remainingDice.Count == 0)
         {
             if (enableDebugLogs)
-                Debug.Log("All dice used! Spawning fresh dice to continue turn and build higher score.");
+                Debug.Log("🔥 HOT STREAK! All dice used - spawning fresh set!");
             
-            // Spawn fresh dice to continue the turn (don't end the turn!)
+            // All dice used - spawn new set and continue turn automatically
+            // No choice given - hot streak always continues
             diceController.SpawnNewDice();
         }
         else
@@ -252,8 +281,20 @@ public class GameTurnManager : MonoBehaviour
             if (enableDebugLogs)
                 Debug.Log($"{remainingDice.Count} dice remaining. Player can choose to continue or end turn.");
             
-            // Show turn choice buttons
+            // DECISION PHASE: Show only end/continue buttons
+            // Disable selection and clear any existing selections
             waitingForTurnChoice = true;
+            waitingForSubmission = false;
+            
+            if (diceSelector != null)
+            {
+                diceSelector.DisableSelection();
+                diceSelector.ClearAllSelections();
+            }
+            
+            if (submitCombinationButton != null)
+                submitCombinationButton.gameObject.SetActive(false);
+            
             ShowTurnChoiceButtons();
         }
     }
@@ -349,6 +390,13 @@ public class GameTurnManager : MonoBehaviour
         if (enableDebugLogs)
             Debug.Log("Player manually ending turn");
         
+        // Disable selection and clear selections when ending turn
+        if (diceSelector != null)
+        {
+            diceSelector.DisableSelection();
+            diceSelector.ClearAllSelections();
+        }
+        
         // Complete current turn
         scoreManager.CompleteTurn();
         totalScore = scoreManager.totalGameScore;
@@ -402,6 +450,13 @@ public class GameTurnManager : MonoBehaviour
         waitingForTurnChoice = false;
         HideAllButtons();
         
+        // Disable selection during reroll
+        if (diceSelector != null)
+        {
+            diceSelector.DisableSelection();
+            diceSelector.ClearAllSelections();
+        }
+        
         // Reroll remaining dice
         diceController.RollDiceFromUI();
     }
@@ -418,10 +473,14 @@ public class GameTurnManager : MonoBehaviour
     
     void ShowTurnChoiceButtons()
     {
+        // DECISION PHASE: Show only end turn and continue buttons
+        // Submit button should already be hidden
         if (endTurnButton != null)
             endTurnButton.gameObject.SetActive(true);
         if (continueTurnButton != null)
             continueTurnButton.gameObject.SetActive(true);
+        if (submitCombinationButton != null)
+            submitCombinationButton.gameObject.SetActive(false);
     }
     
     void RemoveSelectedDice(List<GameObject> selectedDice)
@@ -585,12 +644,12 @@ public class GameTurnManager : MonoBehaviour
     }
     
     /// <summary>
-    /// Checks if the game is over (someone reached 5000 points)
+    /// Checks if the game is over (someone reached victory score)
     /// </summary>
     public bool IsGameOver()
     {
         if (!isAIOpponent) return false;
-        return playerScore >= 5000 || aiScore >= 5000;
+        return playerScore >= victoryScore || aiScore >= victoryScore;
     }
     
     /// <summary>
@@ -600,8 +659,8 @@ public class GameTurnManager : MonoBehaviour
     {
         if (!IsGameOver()) return null;
         
-        if (playerScore >= 5000) return "Player";
-        if (aiScore >= 5000) return "AI";
+        if (playerScore >= victoryScore) return "Player";
+        if (aiScore >= victoryScore) return "AI";
         return null;
     }
     
@@ -792,15 +851,13 @@ public class GameTurnManager : MonoBehaviour
     }
     
     /// <summary>
-    /// Checks if either player has reached 5000 points and ends the game
+    /// Checks if either player has reached victory score and ends the game
     /// </summary>
     void CheckForVictory()
     {
         if (!isAIOpponent) return; // Only check in AI vs Player mode
         
-        const int VICTORY_SCORE = 5000;
-        
-        if (playerScore >= VICTORY_SCORE)
+        if (playerScore >= victoryScore)
         {
             if (enableDebugLogs)
                 Debug.Log($"🏆 VICTORY: Player wins with {playerScore} points!");
@@ -823,7 +880,7 @@ public class GameTurnManager : MonoBehaviour
                 uiManager.UpdateAllUI();
             }
         }
-        else if (aiScore >= VICTORY_SCORE)
+        else if (aiScore >= victoryScore)
         {
             if (enableDebugLogs)
                 Debug.Log($"🏆 VICTORY: AI wins with {aiScore} points!");

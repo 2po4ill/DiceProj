@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.InputSystem;
 using TMPro;
 
 public class GameManager : MonoBehaviour
@@ -141,6 +142,12 @@ public class GameManager : MonoBehaviour
     
     void Update()
     {
+        // Check for restart key (R) using Input System
+        if (Keyboard.current != null && Keyboard.current.rKey.wasPressedThisFrame)
+        {
+            RestartGame();
+        }
+        
         // Update Player vs AI UI if in AI opponent mode
         if (currentGameMode == GameMode.AIOpponent && gameActive)
         {
@@ -152,9 +159,9 @@ public class GameManager : MonoBehaviour
     {
         if (turnManager == null) return;
         
-        // Check for victory condition (5000 points)
-        bool playerWon = turnManager.playerScore >= 5000;
-        bool aiWon = turnManager.aiScore >= 5000;
+        // Check for victory condition
+        bool playerWon = turnManager.playerScore >= turnManager.victoryScore;
+        bool aiWon = turnManager.aiScore >= turnManager.victoryScore;
         
         // Update scores
         if (playerScoreText != null)
@@ -292,7 +299,52 @@ public class GameManager : MonoBehaviour
         if (enableDebugLogs)
             Debug.Log($"Restarting game in {currentGameMode} mode");
         
-        StartGame(currentGameMode);
+        // Stop any active AI turn
+        if (turnManager != null && turnManager.isAITurn && turnManager.aiTurnExecutor != null)
+        {
+            turnManager.aiTurnExecutor.ForceEndTurn();
+        }
+        
+        // Clear all scores
+        if (turnManager != null)
+        {
+            turnManager.playerScore = 0;
+            turnManager.aiScore = 0;
+            turnManager.totalScore = 0;
+            turnManager.currentTurnScore = 0;
+            turnManager.currentTurn = 1;
+            turnManager.isAITurn = false; // Make it player's turn
+        }
+        
+        // Clear all dice (both player and AI dice)
+        if (turnManager != null && turnManager.diceController != null)
+        {
+            // Clear AI dice
+            turnManager.diceController.ClearAIDice();
+            
+            // Clear player dice explicitly
+            turnManager.diceController.ClearPlayerDice();
+        }
+        
+        // Reset score manager
+        if (turnManager != null && turnManager.scoreManager != null)
+        {
+            turnManager.scoreManager.StartNewTurn(1);
+        }
+        
+        // Start new turn (this will spawn new dice and make it player's turn)
+        if (turnManager != null)
+        {
+            turnManager.StartNewTurn();
+        }
+        
+        // Update UI
+        if (currentGameMode == GameMode.AIOpponent)
+        {
+            UpdatePlayerVsAIUI();
+        }
+        
+        gameActive = true;
     }
     
     /// <summary>
@@ -302,8 +354,8 @@ public class GameManager : MonoBehaviour
     {
         if (turnManager == null || !IsAIOpponentMode()) return false;
         
-        bool playerWon = turnManager.playerScore >= 5000;
-        bool aiWon = turnManager.aiScore >= 5000;
+        bool playerWon = turnManager.playerScore >= turnManager.victoryScore;
+        bool aiWon = turnManager.aiScore >= turnManager.victoryScore;
         
         if (playerWon || aiWon)
         {

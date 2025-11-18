@@ -7,7 +7,8 @@ using HybridEnemyAI;
 public class AIGameStateAnalyzer : MonoBehaviour
 {
     [Header("Configuration")]
-    public AIConfiguration config;
+    [Tooltip("AI Configuration - Edit PointsCapAggressive and PointsCapPassive here!")]
+    public AIConfiguration config = new AIConfiguration();
     
     [Header("Debug")]
     public bool enableDebugLogs = false;
@@ -25,6 +26,11 @@ public class AIGameStateAnalyzer : MonoBehaviour
         }
         
         currentBufferCap = config.InitialBufferCap;
+        
+        if (enableDebugLogs)
+        {
+            Debug.Log($"AIGameStateAnalyzer initialized with caps: Aggressive={config.PointsCapAggressive}, Passive={config.PointsCapPassive}");
+        }
     }
     
     /// <summary>
