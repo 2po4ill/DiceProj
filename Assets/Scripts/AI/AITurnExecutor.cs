@@ -28,6 +28,38 @@ public class AITurnExecutor : MonoBehaviour
     [Header("AI Configuration")]
     public AIConfiguration aiConfig;
     
+    [Header("Turn Timing Settings")]
+    [Tooltip("Time to show initial dice roll")]
+    public float initialSetupDelay = 1.0f;
+    [Tooltip("Time for AI to analyze dice")]
+    public float analyzingDelay = 0.5f;
+    [Tooltip("Time to show dice removal")]
+    public float diceRemovalDelay = 0.5f;
+    [Tooltip("Time to show continue decision")]
+    public float continueDecisionDelay = 0.5f;
+    [Tooltip("Time between iteration steps")]
+    public float stepCompleteDelay = 0.5f;
+    [Tooltip("Time after hot streak before next iteration")]
+    public float hotStreakDelay = 0.5f;
+    [Tooltip("Time for aggressive mode initial setup")]
+    public float aggressiveSetupDelay = 3.0f;
+    [Tooltip("Time for aggressive mode analysis")]
+    public float aggressiveAnalysisDelay = 2.0f;
+    [Tooltip("Time for aggressive mode final result")]
+    public float aggressiveFinalDelay = 2.0f;
+    [Tooltip("Time for aggressive iteration thinking")]
+    public float aggressiveIterationThinkDelay = 1.5f;
+    [Tooltip("Time for aggressive combination selection")]
+    public float aggressiveCombinationDelay = 1.5f;
+    [Tooltip("Time for aggressive dice removal")]
+    public float aggressiveDiceRemovalDelay = 1.0f;
+    [Tooltip("Time for aggressive hot streak")]
+    public float aggressiveHotStreakDelay = 1.5f;
+    [Tooltip("Time for aggressive continue decision")]
+    public float aggressiveContinueDelay = 1.0f;
+    [Tooltip("Time for aggressive final visualization")]
+    public float aggressiveVisualizationDelay = 2.0f;
+    
     [Header("Current Turn State")]
     public AITurnState currentTurnState;
     
@@ -191,7 +223,7 @@ public class AITurnExecutor : MonoBehaviour
         // Initial delay to show AI dice
         if (enableDebugLogs)
             Debug.Log("AI (Aggressive) starting - showing initial dice...");
-        yield return new WaitForSeconds(3.0f);
+        yield return new WaitForSeconds(aggressiveSetupDelay);
         
         // Set up dual probability cap system
         if (dualProbabilityCapSystem != null)
@@ -202,7 +234,7 @@ public class AITurnExecutor : MonoBehaviour
         // Show AI thinking
         if (enableDebugLogs)
             Debug.Log("AI (Aggressive) analyzing all possibilities...");
-        yield return new WaitForSeconds(2.0f);
+        yield return new WaitForSeconds(aggressiveAnalysisDelay);
         
         // Execute aggressive reroll strategy
         var aggressiveResult = aggressiveRerollStrategy.ExecuteAggressiveReroll(
@@ -224,7 +256,7 @@ public class AITurnExecutor : MonoBehaviour
         // Final delay to show results
         if (enableDebugLogs)
             Debug.Log("Aggressive turn complete - showing final result...");
-        yield return new WaitForSeconds(2.0f);
+        yield return new WaitForSeconds(aggressiveFinalDelay);
     }
     
     /// <summary>
@@ -235,7 +267,7 @@ public class AITurnExecutor : MonoBehaviour
         // Initial delay to let player see the AI dice
         if (enableDebugLogs)
             Debug.Log("AI turn starting - showing initial dice...");
-        yield return new WaitForSeconds(3.0f);
+        yield return new WaitForSeconds(initialSetupDelay);
         
         while (isTurnActive && currentTurnState.IterationCount < currentTurnState.MaxIterations)
         {
@@ -314,7 +346,7 @@ public class AITurnExecutor : MonoBehaviour
                     actionLog.LogAIDecision(false, stopDecision.DecisionReason);
                 }
                 
-                yield return new WaitForSeconds(1.5f);
+                yield return new WaitForSeconds(continueDecisionDelay);
                 
                 // Roll fresh 6 dice for final combination
                 if (enableDebugLogs)
@@ -334,7 +366,7 @@ public class AITurnExecutor : MonoBehaviour
                     diceController.SpawnAIDice(currentTurnState.CurrentDice);
                 }
                 
-                yield return new WaitForSeconds(2.5f);
+                yield return new WaitForSeconds(initialSetupDelay);
                 
                 // Check for zonk on final roll
                 if (!combinationDetector.HasAnyCombination(currentTurnState.CurrentDice))
@@ -346,12 +378,13 @@ public class AITurnExecutor : MonoBehaviour
                 }
                 
                 // Select and process best combination from fresh 6 dice
+                // For final combination, just maximize points (no risk, turn is ending)
                 if (enableDebugLogs)
-                    Debug.Log("AI selecting final combination...");
+                    Debug.Log("AI selecting final combination (maximize points)...");
                 
-                yield return new WaitForSeconds(1.5f);
+                yield return new WaitForSeconds(analyzingDelay);
                 
-                var finalCombination = SelectBestCombination();
+                var finalCombination = SelectHighestPointsCombination();
                 if (finalCombination != null)
                 {
                     if (enableDebugLogs)
@@ -372,7 +405,7 @@ public class AITurnExecutor : MonoBehaviour
                     }
                     
                     ProcessCombination(finalCombination);
-                    yield return new WaitForSeconds(2.0f);
+                    yield return new WaitForSeconds(diceRemovalDelay);
                 }
                 
                 // End turn
@@ -392,7 +425,7 @@ public class AITurnExecutor : MonoBehaviour
                     yield break;
                 }
                 
-                yield return new WaitForSeconds(1.5f);
+                yield return new WaitForSeconds(continueDecisionDelay);
                 
                 // Generate fresh dice for next iteration
                 currentTurnState.CurrentDice = diceGenerator.GenerateRandomDice(6);
@@ -409,7 +442,7 @@ public class AITurnExecutor : MonoBehaviour
                     diceController.SpawnAIDice(currentTurnState.CurrentDice);
                 }
                 
-                yield return new WaitForSeconds(2.5f);
+                yield return new WaitForSeconds(hotStreakDelay);
             }
         }
         else
@@ -428,16 +461,10 @@ public class AITurnExecutor : MonoBehaviour
         if (enableDebugLogs)
             Debug.Log($"--- Combination Step within Iteration {currentTurnState.IterationCount} ---");
         
-        // Log current dice to action log (ensures dice are always visible, even if minor duplicates occur)
-        if (actionLog != null)
-        {
-            actionLog.LogAIDiceRoll(currentTurnState.CurrentDice);
-        }
-        
         // Step 1: AI thinking delay
         if (enableDebugLogs)
             Debug.Log("AI is analyzing dice...");
-        yield return new WaitForSeconds(2.0f);
+        yield return new WaitForSeconds(analyzingDelay);
             
         // Step 2: Check for Zonk
         if (!combinationDetector.HasAnyCombination(currentTurnState.CurrentDice))
@@ -465,30 +492,53 @@ public class AITurnExecutor : MonoBehaviour
             Debug.Log($"Dice used: {GetDiceUsedForCombination(selectedCombination.rule)}");
         }
         
-        // Log combination selection to action log
-        if (actionLog != null)
-        {
-            actionLog.LogAICombination(
-                selectedCombination.description,
-                selectedCombination.points,
-                GetDiceUsedForCombination(selectedCombination.rule)
-            );
-        }
+        // Step 5: Save state before processing (for logging)
+        List<int> rolledDiceBeforeProcessing = new List<int>(currentTurnState.CurrentDice);
+        int previousScore = currentTurnState.CurrentTurnScore;
         
-        yield return new WaitForSeconds(1.5f);
-        
-        // Step 5: Process the combination (dice disappear here)
+        // Process the combination (dice disappear here)
         ProcessCombination(selectedCombination);
+        int diceRemaining = GetRemainingDiceCount();
         
         // Step 6: Show result of selection
         if (enableDebugLogs)
         {
-            Debug.Log($"Selected dice removed! Remaining dice: {GetRemainingDiceCount()}");
+            Debug.Log($"Selected dice removed! Remaining dice: {diceRemaining}");
         }
-        yield return new WaitForSeconds(2.0f);
+        yield return new WaitForSeconds(diceRemovalDelay);
             
         // Step 7: Check if all dice used (will be handled by parent iteration)
-        if (GetRemainingDiceCount() == 0)
+        bool allDiceUsed = diceRemaining == 0;
+        
+        // Log complete iteration to action log (combined format)
+        if (actionLog != null)
+        {
+            // Convert dice indices to actual dice values for display
+            List<int> selectedDiceValues = new List<int>();
+            if (selectedCombination.diceIndices != null)
+            {
+                foreach (int index in selectedCombination.diceIndices)
+                {
+                    if (index >= 0 && index < rolledDiceBeforeProcessing.Count)
+                    {
+                        selectedDiceValues.Add(rolledDiceBeforeProcessing[index]);
+                    }
+                }
+            }
+            
+            actionLog.LogAIIteration(
+                rolledDice: rolledDiceBeforeProcessing,
+                selectedDice: selectedDiceValues,
+                combinationName: selectedCombination.description,
+                combinationPoints: selectedCombination.points,
+                previousScore: previousScore,
+                totalScore: currentTurnState.CurrentTurnScore,
+                continues: !allDiceUsed,
+                diceRemaining: diceRemaining
+            );
+        }
+        
+        if (allDiceUsed)
         {
             if (enableDebugLogs)
                 Debug.Log("All dice used in this combination step! Hot streak achieved.");
@@ -497,24 +547,12 @@ public class AITurnExecutor : MonoBehaviour
         
         // Step 8: AI automatically continues (no stop decision during iteration)
         if (enableDebugLogs)
-            Debug.Log($"AI continues with {GetRemainingDiceCount()} dice remaining...");
+            Debug.Log($"AI continues with {diceRemaining} dice remaining...");
         
-        // Log continue decision to action log
-        if (actionLog != null)
-        {
-            actionLog.LogAIDecision(true, $"{GetRemainingDiceCount()} dice remaining");
-        }
-        
-        yield return new WaitForSeconds(1.0f);
+        yield return new WaitForSeconds(continueDecisionDelay);
         
         // Step 9: Generate new dice for remaining positions
         RegenerateRemainingDice();
-        
-        // Log rerolled dice to action log
-        if (actionLog != null)
-        {
-            actionLog.LogAIDiceRoll(currentTurnState.CurrentDice);
-        }
         
         // Step 10: Update visual dice after reroll
         if (diceController != null)
@@ -533,7 +571,7 @@ public class AITurnExecutor : MonoBehaviour
         // Step 11: Final delay before next combination step
         if (enableDebugLogs)
             Debug.Log($"Combination step complete. Continuing iteration {currentTurnState.IterationCount}...");
-        yield return new WaitForSeconds(2.0f);
+        yield return new WaitForSeconds(stepCompleteDelay);
     }
     
     CombinationResult SelectBestCombination()
@@ -555,6 +593,26 @@ public class AITurnExecutor : MonoBehaviour
         if (enableDebugLogs && selectedCombination != null)
         {
             Debug.Log($"Selected Combination: {selectedCombination.rule} - {selectedCombination.description}");
+            Debug.Log($"Points: {selectedCombination.points}, Dice Used: {GetDiceUsedForCombination(selectedCombination.rule)}");
+        }
+        
+        return selectedCombination;
+    }
+    
+    CombinationResult SelectHighestPointsCombination()
+    {
+        // For final combination after stop decision - just maximize points
+        var availableCombinations = combinationStrategy.FindAllValidCombinations(currentTurnState.CurrentDice);
+        
+        if (availableCombinations.Count == 0)
+            return null;
+        
+        // Select combination with highest points (no strategy, no risk)
+        var selectedCombination = availableCombinations.OrderByDescending(c => c.points).First();
+        
+        if (enableDebugLogs && selectedCombination != null)
+        {
+            Debug.Log($"Final Combination (max points): {selectedCombination.rule} - {selectedCombination.description}");
             Debug.Log($"Points: {selectedCombination.points}, Dice Used: {GetDiceUsedForCombination(selectedCombination.rule)}");
         }
         
@@ -1260,7 +1318,7 @@ public class AITurnExecutor : MonoBehaviour
             }
             
             // AI thinking delay
-            yield return new WaitForSeconds(1.5f);
+            yield return new WaitForSeconds(aggressiveIterationThinkDelay);
             
             if (iteration.SelectedCombination != null)
             {
@@ -1282,7 +1340,7 @@ public class AITurnExecutor : MonoBehaviour
                 }
                 
                 // Show combination selection
-                yield return new WaitForSeconds(1.5f);
+                yield return new WaitForSeconds(aggressiveCombinationDelay);
                 
                 // Remove dice using actual indices from the combination
                 if (diceController != null && iteration.DiceIndicesUsed != null && iteration.DiceIndicesUsed.Count > 0)
@@ -1310,7 +1368,7 @@ public class AITurnExecutor : MonoBehaviour
                 }
                 
                 // Show dice removal result
-                yield return new WaitForSeconds(1.0f);
+                yield return new WaitForSeconds(aggressiveDiceRemovalDelay);
             }
             
             // Check for hot streak
@@ -1328,7 +1386,7 @@ public class AITurnExecutor : MonoBehaviour
                     actionLog.LogAIHotStreak();
                 }
                 
-                yield return new WaitForSeconds(1.5f);
+                yield return new WaitForSeconds(aggressiveHotStreakDelay);
             }
             else if (iteration.RemainingDice > 0)
             {
@@ -1343,7 +1401,7 @@ public class AITurnExecutor : MonoBehaviour
                     actionLog.LogAIDecision(true, $"{iteration.RemainingDice} dice remaining");
                 }
                 
-                yield return new WaitForSeconds(1.0f);
+                yield return new WaitForSeconds(aggressiveContinueDelay);
             }
         }
         
@@ -1374,6 +1432,6 @@ public class AITurnExecutor : MonoBehaviour
             actionLog.LogAITurnEnd(result.TotalPointsScored, result.HotStreakCount + 1);
         }
         
-        yield return new WaitForSeconds(2.0f);
+        yield return new WaitForSeconds(aggressiveVisualizationDelay);
     }
 }

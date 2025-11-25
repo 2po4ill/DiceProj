@@ -110,6 +110,10 @@ namespace HybridEnemyAI
         public float ConservativeTwoDiceStopChance = 0.7f; // High stop chance with 2 dice in conservative mode
         public float ConservativeOneDiceStopChance = 0.9f; // Very high stop chance with 1 dice in conservative mode
         
+        [Header("High Value Combination Threshold")]
+        [Tooltip("Minimum points required for AI to select multi-dice combinations (4-6 dice on board)")]
+        public int HighValueCombinationThreshold = 600;
+        
         [Header("Debug")]
         public bool EnableDebugLogs = false;
         public bool ShowProbabilityCalculations = false;

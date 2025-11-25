@@ -18,9 +18,20 @@ namespace HybridEnemyAI
         [Header("Rigged Probability (AI Safety Net)")]
         [Tooltip("Enable rigged dice when AI has 1-4 dice remaining")]
         [SerializeField] private bool enableRiggedDice = true;
-        [Tooltip("Probability that ONE dice will be 1 or 5 when rigging is active (0.9 = 90%)")]
+        
+        [Header("Rigged Combination Probabilities")]
+        [Tooltip("Chance to generate a 4-dice combination when 4 dice remain")]
         [Range(0f, 1f)]
-        [SerializeField] private float riggedSafetyProbability = 0.9f;
+        [SerializeField] private float fourDiceComboProbability = 0.5f;
+        [Tooltip("Chance to generate a 3-dice combination (fallback from 4)")]
+        [Range(0f, 1f)]
+        [SerializeField] private float threeDiceComboProbability = 0.6f;
+        [Tooltip("Chance to generate a 2-dice combination (fallback from 3)")]
+        [Range(0f, 1f)]
+        [SerializeField] private float twoDiceComboProbability = 0.7f;
+        [Tooltip("Chance to generate a 1-dice combination (final fallback)")]
+        [Range(0f, 1f)]
+        [SerializeField] private float oneDiceComboProbability = 0.9f;
         
         [Header("Distribution Validation")]
         [SerializeField] private int validationSampleSize = 10000;
@@ -30,78 +41,132 @@ namespace HybridEnemyAI
         private Dictionary<int, int> generationStats = new Dictionary<int, int>();
         private int totalGenerations = 0;
         
+        // Combination templates for rigged dice
+        private readonly int[][] fourDiceTemplates = new int[][]
+        {
+            new int[] {1,2,3,4}, new int[] {2,3,4,5}, new int[] {3,4,5,6}, // Middle straights
+            new int[] {1,1,2,2}, new int[] {3,3,4,4}, new int[] {5,5,6,6}, // Two pairs
+            new int[] {1,1,1,1}, new int[] {2,2,2,2}, new int[] {3,3,3,3}, // Four of a kind
+            new int[] {4,4,4,4}, new int[] {5,5,5,5}, new int[] {6,6,6,6}
+        };
+        
+        private readonly int[][] threeDiceTemplates = new int[][]
+        {
+            new int[] {1,2,3}, new int[] {2,3,4}, new int[] {3,4,5}, new int[] {4,5,6}, // Low straights
+            new int[] {1,1,1}, new int[] {2,2,2}, new int[] {3,3,3}, // Three of a kind
+            new int[] {4,4,4}, new int[] {5,5,5}, new int[] {6,6,6}
+        };
+        
+        private readonly int[][] twoDiceTemplates = new int[][]
+        {
+            new int[] {1,1}, new int[] {2,2}, new int[] {3,3}, // Pairs
+            new int[] {4,4}, new int[] {5,5}, new int[] {6,6}
+        };
+        
+        private readonly int[][] oneDiceTemplates = new int[][]
+        {
+            new int[] {1}, new int[] {5} // Single scoring dice (50/50)
+        };
+        
         private void Awake()
         {
             InitializeStats();
         }
         
         /// <summary>
-        /// Generate random dice values instantly without physics
-        /// Applies rigged probability when count is 1-4 (AI safety net)
+        /// Generate random dice values with template-based rigging for AI safety
         /// </summary>
-        /// <param name="count">Number of dice to generate</param>
-        /// <returns>List of dice values (1-6)</returns>
         public List<int> GenerateRandomDice(int count)
         {
-            if (count <= 0)
+            if (count <= 0 || count > 6)
             {
                 if (enableDebugLogs)
-                    Debug.LogWarning("AIDiceGenerator: Invalid dice count requested: " + count);
+                    Debug.LogWarning($"AIDiceGenerator: Invalid dice count: {count}");
                 return new List<int>();
             }
             
-            List<int> diceValues = new List<int>();
-            
-            // RIGGED PROBABILITY: When 1-4 dice, guarantee at least one 1 or 5 (90% chance)
-            bool shouldRig = enableRiggedDice && count >= 1 && count <= 4;
-            bool rigApplied = false;
-            
-            if (shouldRig && Random.Range(0f, 1f) < riggedSafetyProbability)
+            // Try rigged generation for 1-4 dice
+            if (enableRiggedDice && count >= 1 && count <= 4)
             {
-                // Pick a random position to place the safety dice
-                int safetyPosition = Random.Range(0, count);
-                
-                for (int i = 0; i < count; i++)
+                var riggedDice = TryGenerateRiggedCombination(count);
+                if (riggedDice != null)
                 {
-                    int value;
-                    
-                    if (i == safetyPosition && !rigApplied)
-                    {
-                        // Place a 1 or 5 at this position (50/50 chance)
-                        value = Random.Range(0, 2) == 0 ? 1 : 5;
-                        rigApplied = true;
-                        
-                        if (enableDebugLogs)
-                            Debug.Log($"AIDiceGenerator: RIGGED - Placed safety dice ({value}) at position {i}");
-                    }
-                    else
-                    {
-                        // Normal random dice
-                        value = Random.Range(1, 7);
-                    }
-                    
-                    diceValues.Add(value);
-                    UpdateGenerationStats(value);
+                    foreach (int val in riggedDice) UpdateGenerationStats(val);
+                    if (enableDebugLogs)
+                        Debug.Log($"AIDiceGenerator: RIGGED {count} dice: [{string.Join(", ", riggedDice)}]");
+                    return riggedDice;
                 }
             }
-            else
+            
+            // Normal random generation
+            List<int> diceValues = new List<int>();
+            for (int i = 0; i < count; i++)
             {
-                // Normal generation (no rigging or rigging failed)
-                for (int i = 0; i < count; i++)
-                {
-                    int value = Random.Range(1, 7);
-                    diceValues.Add(value);
-                    UpdateGenerationStats(value);
-                }
+                int value = Random.Range(1, 7);
+                diceValues.Add(value);
+                UpdateGenerationStats(value);
             }
             
             if (enableDebugLogs)
-            {
-                string rigStatus = shouldRig ? (rigApplied ? " [RIGGED]" : " [RIG FAILED]") : "";
-                Debug.Log($"AIDiceGenerator: Generated {count} dice: [{string.Join(", ", diceValues)}]{rigStatus}");
-            }
+                Debug.Log($"AIDiceGenerator: Generated {count} dice: [{string.Join(", ", diceValues)}]");
             
             return diceValues;
+        }
+        
+        /// <summary>
+        /// Tries to generate a rigged combination using templates and fallback chain
+        /// </summary>
+        List<int> TryGenerateRiggedCombination(int count)
+        {
+            // Try primary tier (matching dice count)
+            if (count == 4 && Random.Range(0f, 1f) < fourDiceComboProbability)
+                return ShuffleTemplate(fourDiceTemplates);
+            if (count == 3 && Random.Range(0f, 1f) < threeDiceComboProbability)
+                return ShuffleTemplate(threeDiceTemplates);
+            if (count == 2 && Random.Range(0f, 1f) < twoDiceComboProbability)
+                return ShuffleTemplate(twoDiceTemplates);
+            
+            // Fallback chain
+            if (count >= 3 && Random.Range(0f, 1f) < threeDiceComboProbability)
+                return PadTemplate(ShuffleTemplate(threeDiceTemplates), count);
+            if (count >= 2 && Random.Range(0f, 1f) < twoDiceComboProbability)
+                return PadTemplate(ShuffleTemplate(twoDiceTemplates), count);
+            if (Random.Range(0f, 1f) < oneDiceComboProbability)
+                return PadTemplate(ShuffleTemplate(oneDiceTemplates), count);
+            
+            return null; // All rigging failed
+        }
+        
+        /// <summary>
+        /// Picks random template and shuffles it
+        /// </summary>
+        List<int> ShuffleTemplate(int[][] templates)
+        {
+            var template = templates[Random.Range(0, templates.Length)];
+            var shuffled = new List<int>(template);
+            
+            // Fisher-Yates shuffle
+            for (int i = shuffled.Count - 1; i > 0; i--)
+            {
+                int j = Random.Range(0, i + 1);
+                int temp = shuffled[i];
+                shuffled[i] = shuffled[j];
+                shuffled[j] = temp;
+            }
+            
+            return shuffled;
+        }
+        
+        /// <summary>
+        /// Pads template with random dice to reach target count
+        /// </summary>
+        List<int> PadTemplate(List<int> template, int targetCount)
+        {
+            while (template.Count < targetCount)
+            {
+                template.Add(Random.Range(1, 7));
+            }
+            return template;
         }
         
         /// <summary>

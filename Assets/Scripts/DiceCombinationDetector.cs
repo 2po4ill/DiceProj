@@ -381,9 +381,15 @@ public class DiceCombinationDetector : MonoBehaviour
 
     // Calculation Methods
 
+    int CalculateFourOfAKind(int diceValue, DiceCombinationRules.CombinationRule rule)
+    {
+        return CalculateOfAKind(diceValue, rule) * 2;
+    }
+
     int CalculateOfAKind(int diceValue, DiceCombinationRules.CombinationRule rule)
     {
-        return Mathf.RoundToInt(diceValue * rule.points * rule.multiplier);
+        if (diceValue == 1) return Mathf.RoundToInt(10 * rule.points * rule.multiplier);
+        else return Mathf.RoundToInt(diceValue * rule.points * rule.multiplier);
     }
 
     int CalculateOne(int diceValue, DiceCombinationRules.CombinationRule rule)
@@ -398,9 +404,23 @@ public class DiceCombinationDetector : MonoBehaviour
 
     int CalculateFullHouse(List<int> diceValues, DiceCombinationRules.CombinationRule rule)
     {
+        var pairRule = combinationRules.GetRule(Rule.Pair);
         var counts = GetValueCounts(diceValues);
         int threeOfKindValue = counts.First(kvp => kvp.Value == 3).Key;
-        return Mathf.RoundToInt((rule.points * threeOfKindValue + 50) * rule.multiplier);
+        int pairValue = counts.First(kvp => kvp.Value == 2).Key;
+        return Mathf.RoundToInt(((CalculateOfAKind(threeOfKindValue, rule)) + CalculatePair(pairValue, pairRule)) * 3);
+    }
+
+    int CalculatePair(int diceValue, DiceCombinationRules.CombinationRule rule)
+    {
+        return Mathf.RoundToInt((diceValue == 1 ? 300 : rule.points) * rule.multiplier);
+    }
+
+    int CalculateTwoPair(List<int> diceValues, DiceCombinationRules.CombinationRule rule)
+    {
+        var counts = GetValueCounts(diceValues);
+        var uniqueValues = counts.Keys.ToList();
+        return Mathf.RoundToInt((CalculatePair(uniqueValues[0], rule) + CalculatePair(uniqueValues[1], rule)) * 2);
     }
     
     int CalculateScore(List<int> diceValues, DiceCombinationRules.CombinationRule rule)
@@ -410,7 +430,7 @@ public class DiceCombinationDetector : MonoBehaviour
             case Count.TwoSets:
                 var counts = GetValueCounts(diceValues);
                 var uniqueValues = counts.Keys.ToList();
-                return CalculateOfAKind(uniqueValues[0], rule) + CalculateOfAKind(uniqueValues[1], rule);
+                return (CalculateOfAKind(uniqueValues[0], rule) + CalculateOfAKind(uniqueValues[1], rule)) * 4;
             case Count.MaxStraight:
                 return CalculateRule(rule);
             case Count.Straight:
@@ -418,7 +438,7 @@ public class DiceCombinationDetector : MonoBehaviour
             case Count.ThreePairs:
                 return CalculateRule(rule);
             case Count.FourOfKind:
-                return CalculateOfAKind(diceValues[0], rule);
+                return CalculateFourOfAKind(diceValues[0], rule);
             case Count.FullHouse:
                 return CalculateFullHouse(diceValues, rule);
             case Count.ThreeOfKind:
@@ -428,9 +448,9 @@ public class DiceCombinationDetector : MonoBehaviour
             case Count.LowStraight:
                 return CalculateRule(rule);
             case Count.TwoPair:
-                return CalculateRule(rule);
+                return CalculateTwoPair(diceValues, rule);
             case Count.Pair:
-                return CalculateRule(rule);
+                return CalculatePair(diceValues[0], rule);
             case Count.One:
                 return CalculateOne(diceValues[0], rule);        
             default:

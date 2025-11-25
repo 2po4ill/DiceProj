@@ -159,6 +159,28 @@ public class AIActionLog : MonoBehaviour
     }
     
     /// <summary>
+    /// Logs complete AI iteration with all details in one entry
+    /// Format: 
+    /// 1) Rolled dice
+    /// 2) Selected combination with dice used
+    /// 3) Total score (previous + current)
+    /// 4) Decision (continues/stops, dice remaining)
+    /// </summary>
+    public void LogAIIteration(List<int> rolledDice, List<int> selectedDice, string combinationName, 
+                               int combinationPoints, int previousScore, int totalScore, 
+                               bool continues, int diceRemaining)
+    {
+        string diceRolled = $"[{string.Join(", ", rolledDice)}]";
+        string diceSelected = $"[{string.Join(", ", selectedDice)}]";
+        string decision = continues ? $"Продолжает, {diceRemaining} кубиков осталось" : "Останавливается";
+        
+        LogAIAction($"Rolled: {diceRolled}");
+        LogAIAction($"Selected: {diceSelected} {combinationName}, {combinationPoints} pts");
+        LogAIAction($"Score: {previousScore} + {combinationPoints} = {totalScore} pts");
+        LogAIAction($"Decision: {decision}");
+    }
+    
+    /// <summary>
     /// Logs player turn start
     /// </summary>
     public void LogPlayerTurnStart(int turnNumber)

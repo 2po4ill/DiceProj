@@ -349,8 +349,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 462, y: 73}
-  m_SizeDelta: {x: 200, y: 200}
+  m_AnchoredPosition: {x: 390, y: 0}
+  m_SizeDelta: {x: 400, y: 300}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &169525333
 MonoBehaviour:
@@ -1144,6 +1144,7 @@ MonoBehaviour:
     ConservativeEarlySatisfactionThreshold: 0.8
     ConservativeTwoDiceStopChance: 0.7
     ConservativeOneDiceStopChance: 0.9
+    HighValueCombinationThreshold: 600
     EnableDebugLogs: 1
     ShowProbabilityCalculations: 1
   enableDebugLogs: 1
@@ -1189,6 +1190,7 @@ MonoBehaviour:
     ConservativeEarlySatisfactionThreshold: 0.8
     ConservativeTwoDiceStopChance: 0.7
     ConservativeOneDiceStopChance: 0.9
+    HighValueCombinationThreshold: 600
     EnableDebugLogs: 0
     ShowProbabilityCalculations: 0
   dualProbabilityCapSystem: {fileID: 2129209271}
@@ -1238,8 +1240,10 @@ MonoBehaviour:
     ConservativeEarlySatisfactionThreshold: 0.8
     ConservativeTwoDiceStopChance: 0.7
     ConservativeOneDiceStopChance: 0.9
+    HighValueCombinationThreshold: 600
     EnableDebugLogs: 0
     ShowProbabilityCalculations: 0
+  highValueCombinationThreshold: 750
   enableDebugLogs: 1
 --- !u!114 &384444945
 MonoBehaviour:
@@ -1294,8 +1298,24 @@ MonoBehaviour:
     ConservativeEarlySatisfactionThreshold: 0.8
     ConservativeTwoDiceStopChance: 0.7
     ConservativeOneDiceStopChance: 0.9
+    HighValueCombinationThreshold: 750
     EnableDebugLogs: 0
     ShowProbabilityCalculations: 0
+  initialSetupDelay: 1
+  analyzingDelay: 1
+  diceRemovalDelay: 1
+  continueDecisionDelay: 1
+  stepCompleteDelay: 1
+  hotStreakDelay: 1
+  aggressiveSetupDelay: 3
+  aggressiveAnalysisDelay: 2
+  aggressiveFinalDelay: 2
+  aggressiveIterationThinkDelay: 1.5
+  aggressiveCombinationDelay: 1.5
+  aggressiveDiceRemovalDelay: 1
+  aggressiveHotStreakDelay: 1.5
+  aggressiveContinueDelay: 1
+  aggressiveVisualizationDelay: 2
   currentTurnState:
     CurrentTurnScore: 0
     PointsPerTurnCap: 500
@@ -1355,6 +1375,7 @@ MonoBehaviour:
     ConservativeEarlySatisfactionThreshold: 0.8
     ConservativeTwoDiceStopChance: 0.7
     ConservativeOneDiceStopChance: 0.9
+    HighValueCombinationThreshold: 600
     EnableDebugLogs: 0
     ShowProbabilityCalculations: 0
   enableDebugLogs: 1
@@ -2359,7 +2380,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 1}
   m_AnchorMax: {x: 0.5, y: 1}
   m_AnchoredPosition: {x: 0, y: -30}
-  m_SizeDelta: {x: 160, y: 50}
+  m_SizeDelta: {x: 370, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1136813390
 MonoBehaviour:
@@ -2408,8 +2429,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 10
-  m_fontSizeBase: 10
+  m_fontSize: 20
+  m_fontSizeBase: 20
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -3390,7 +3411,7 @@ MonoBehaviour:
   m_HandleRect: {fileID: 1547220783}
   m_Direction: 2
   m_Value: 1
-  m_Size: 0.122
+  m_Size: 0.06288889
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -3893,7 +3914,10 @@ MonoBehaviour:
   enableDebugLogs: 0
   validateDistribution: 1
   enableRiggedDice: 1
-  riggedSafetyProbability: 0.7
+  fourDiceComboProbability: 0.5
+  threeDiceComboProbability: 0.6
+  twoDiceComboProbability: 0.7
+  oneDiceComboProbability: 0.9
   validationSampleSize: 10000
   acceptableVariance: 0.05
 --- !u!114 &1716438502
@@ -4018,7 +4042,7 @@ MonoBehaviour:
   m_HandleRect: {fileID: 971166007}
   m_Direction: 0
   m_Value: 1
-  m_Size: 0.99999964
+  m_Size: 0.9999998
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -4207,7 +4231,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 1, y: 1}
   m_AnchoredPosition: {x: -0.00055639015, y: 0}
-  m_SizeDelta: {x: 0, y: 1500}
+  m_SizeDelta: {x: 0, y: 4500}
   m_Pivot: {x: 0, y: 1}
 --- !u!114 &1820751717
 MonoBehaviour:
@@ -4285,7 +4309,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: First to 15000 wins
+  m_text: First to 10000 wins
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -4576,7 +4600,7 @@ MonoBehaviour:
   isAITurn: 0
   playerScore: 0
   aiScore: 0
-  victoryScore: 15000
+  victoryScore: 10000
   endTurnButton: {fileID: 1395761763}
   continueTurnButton: {fileID: 1164017099}
   enableDebugLogs: 1
@@ -4754,6 +4778,7 @@ MonoBehaviour:
     ConservativeEarlySatisfactionThreshold: 0.8
     ConservativeTwoDiceStopChance: 0.7
     ConservativeOneDiceStopChance: 0.9
+    HighValueCombinationThreshold: 600
     EnableDebugLogs: 0
     ShowProbabilityCalculations: 0
   enableDebugLogs: 1
@@ -4810,6 +4835,7 @@ MonoBehaviour:
     ConservativeEarlySatisfactionThreshold: 0.8
     ConservativeTwoDiceStopChance: 0.7
     ConservativeOneDiceStopChance: 0.9
+    HighValueCombinationThreshold: 600
     EnableDebugLogs: 1
     ShowProbabilityCalculations: 0
   enableDebugLogs: 1
@@ -4923,6 +4949,7 @@ MonoBehaviour:
     ConservativeEarlySatisfactionThreshold: 0.8
     ConservativeTwoDiceStopChance: 0.7
     ConservativeOneDiceStopChance: 0.9
+    HighValueCombinationThreshold: 750
     EnableDebugLogs: 1
     ShowProbabilityCalculations: 0
 --- !u!4 &2129209274
