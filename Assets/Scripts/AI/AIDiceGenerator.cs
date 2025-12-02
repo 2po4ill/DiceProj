@@ -78,6 +78,14 @@ namespace HybridEnemyAI
         /// </summary>
         public List<int> GenerateRandomDice(int count)
         {
+            return GenerateRandomDice(count, enableRiggedDice);
+        }
+        
+        /// <summary>
+        /// Generate random dice values with optional rigging control
+        /// </summary>
+        public List<int> GenerateRandomDice(int count, bool useRiggedDice)
+        {
             if (count <= 0 || count > 6)
             {
                 if (enableDebugLogs)
@@ -85,17 +93,22 @@ namespace HybridEnemyAI
                 return new List<int>();
             }
             
-            // Try rigged generation for 1-4 dice
-            if (enableRiggedDice && count >= 1 && count <= 4)
+            // Try rigged generation for 1-4 dice (only if enabled)
+            if (useRiggedDice && count >= 1 && count <= 4)
             {
                 var riggedDice = TryGenerateRiggedCombination(count);
                 if (riggedDice != null)
                 {
                     foreach (int val in riggedDice) UpdateGenerationStats(val);
-                    if (enableDebugLogs)
-                        Debug.Log($"AIDiceGenerator: RIGGED {count} dice: [{string.Join(", ", riggedDice)}]");
+                    // Always log rigged dice (not just when enableDebugLogs is true)
+                    Debug.Log($"🎰 AIDiceGenerator: RIGGED {count} dice: [{string.Join(", ", riggedDice)}]");
                     return riggedDice;
                 }
+            }
+            else if (count >= 1 && count <= 4)
+            {
+                // Log when rigged dice are NOT used for 1-4 dice
+                Debug.Log($"🎲 AIDiceGenerator: RANDOM {count} dice (rigged disabled: useRiggedDice={useRiggedDice})");
             }
             
             // Normal random generation

@@ -23,6 +23,7 @@ public class AITurnExecutor : MonoBehaviour
     public TurnScoreManager scoreManager;
     public DiceCombinationDetector combinationDetector;
     public DiceController diceController;
+    public GameTurnManager gameTurnManager; // For accessing player/AI total scores
     public AIActionLog actionLog; // Optional: for UI logging
     
     [Header("AI Configuration")]
@@ -106,6 +107,7 @@ public class AITurnExecutor : MonoBehaviour
         if (dualProbabilityCapSystem == null) dualProbabilityCapSystem = GetComponent<AIDualProbabilityCapSystem>();
         if (scoreManager == null) scoreManager = FindObjectOfType<TurnScoreManager>();
         if (combinationDetector == null) combinationDetector = FindObjectOfType<DiceCombinationDetector>();
+        if (gameTurnManager == null) gameTurnManager = FindObjectOfType<GameTurnManager>();
         
         // Validate critical components
         if (gameStateAnalyzer == null || combinationStrategy == null || decisionEngine == null)
@@ -166,8 +168,37 @@ public class AITurnExecutor : MonoBehaviour
         // Set max iterations based on behavior mode
         currentTurnState.MaxIterations = currentTurnState.CurrentMode == BehaviorMode.AGGRESSIVE ? 5 : 2;
         
-        // Generate initial dice
-        currentTurnState.CurrentDice = diceGenerator.GenerateRandomDice(6);
+        // Decide which stop logic to use at turn start
+        int playerTotalScore = gameTurnManager != null ? gameTurnManager.playerScore : 0;
+        int aiGameScore = gameTurnManager != null ? gameTurnManager.aiScore : 0;
+        int scoreDifference = aiGameScore - playerTotalScore;
+        
+        bool playerLeadingByMuch = scoreDifference < -2500; // Player leading by >2500
+        bool playerHasHighScore = playerTotalScore > 8000;
+        
+        // Use custom logic unless player is dominating
+        currentTurnState.UseCustomStopLogic = !(playerLeadingByMuch || playerHasHighScore);
+        
+        // Log AI mode to action log
+        if (actionLog != null)
+        {
+            if (currentTurnState.UseCustomStopLogic)
+            {
+                actionLog.LogAIAction("ИИ в пассивном режиме");
+            }
+            else
+            {
+                actionLog.LogAIAction("ИИ в агрессивном режиме");
+            }
+        }
+        
+        // Generate initial dice (no rigged dice for custom logic)
+        bool useRiggedDice = !currentTurnState.UseCustomStopLogic;
+        
+        if (enableDebugLogs)
+            Debug.Log($"🎲 Initial dice generation: UseCustomLogic={currentTurnState.UseCustomStopLogic}, useRiggedDice={useRiggedDice}");
+        
+        currentTurnState.CurrentDice = diceGenerator.GenerateRandomDice(6, useRiggedDice);
         
         // Log initial dice to action log
         if (actionLog != null)
@@ -187,6 +218,7 @@ public class AITurnExecutor : MonoBehaviour
         {
             Debug.Log($"AI Turn State Initialized:");
             Debug.Log($"  Behavior Mode: {currentTurnState.CurrentMode}");
+            Debug.Log($"  Stop Logic: {(currentTurnState.UseCustomStopLogic ? "CUSTOM" : "PROBABILITY-BASED")}");
             Debug.Log($"  Points Cap: {currentTurnState.PointsPerTurnCap}");
             Debug.Log($"  Max Iterations: {currentTurnState.MaxIterations}");
             Debug.Log($"  Initial Dice: [{string.Join(",", currentTurnState.CurrentDice)}]");
@@ -269,16 +301,28 @@ public class AITurnExecutor : MonoBehaviour
             Debug.Log("AI turn starting - showing initial dice...");
         yield return new WaitForSeconds(initialSetupDelay);
         
-        while (isTurnActive && currentTurnState.IterationCount < currentTurnState.MaxIterations)
+        if (currentTurnState.UseCustomStopLogic)
         {
-            yield return StartCoroutine(ExecuteFullDiceSetIteration());
+            // Custom logic: No iteration limit, only stops on zonk or dice-based conditions
+            while (isTurnActive)
+            {
+                yield return StartCoroutine(ExecuteFullDiceSetIteration());
+            }
         }
-        
-        // Check if we hit iteration limit
-        if (currentTurnState.IterationCount >= currentTurnState.MaxIterations)
+        else
         {
-            if (enableDebugLogs)
-                Debug.Log($"AI reached maximum iterations ({currentTurnState.MaxIterations}). Ending turn.");
+            // Old logic: Use iteration limit
+            while (isTurnActive && currentTurnState.IterationCount < currentTurnState.MaxIterations)
+            {
+                yield return StartCoroutine(ExecuteFullDiceSetIteration());
+            }
+            
+            // Check if we hit iteration limit
+            if (currentTurnState.IterationCount >= currentTurnState.MaxIterations)
+            {
+                if (enableDebugLogs)
+                    Debug.Log($"AI reached maximum iterations ({currentTurnState.MaxIterations}). Ending turn.");
+            }
         }
     }
     
@@ -321,13 +365,25 @@ public class AITurnExecutor : MonoBehaviour
             if (enableDebugLogs)
             {
                 Debug.Log($"HOT STREAK DECISION CHECK:");
+                Debug.Log($"  Using Logic: {(currentTurnState.UseCustomStopLogic ? "CUSTOM" : "PROBABILITY")}");
                 Debug.Log($"  Current Turn Score: {currentTurnState.CurrentTurnScore}");
                 Debug.Log($"  Points Per Turn Cap: {currentTurnState.PointsPerTurnCap}");
                 Debug.Log($"  Iteration Count: {currentTurnState.IterationCount}/{currentTurnState.MaxIterations}");
                 Debug.Log($"  Successful Combinations: {currentTurnState.SuccessfulCombinationsCount}");
             }
             
-            var stopDecision = MakeStopDecision();
+            AIStopDecision stopDecision;
+            
+            if (currentTurnState.UseCustomStopLogic)
+            {
+                // Custom logic: With 6 fresh dice (>4), never stop after hot streak
+                stopDecision = MakeCustomStopDecision(6);
+            }
+            else
+            {
+                // Old probability-based logic
+                stopDecision = MakeStopDecision();
+            }
             
             if (enableDebugLogs)
             {
@@ -352,7 +408,8 @@ public class AITurnExecutor : MonoBehaviour
                 if (enableDebugLogs)
                     Debug.Log("Rolling fresh dice for final combination...");
                 
-                currentTurnState.CurrentDice = diceGenerator.GenerateRandomDice(6);
+                bool useRiggedDice = !currentTurnState.UseCustomStopLogic;
+                currentTurnState.CurrentDice = diceGenerator.GenerateRandomDice(6, useRiggedDice);
                 
                 // Log fresh dice to action log
                 if (actionLog != null)
@@ -416,8 +473,8 @@ public class AITurnExecutor : MonoBehaviour
                 if (enableDebugLogs)
                     Debug.Log($"AI decides to CONTINUE after hot streak: {stopDecision.DecisionReason}");
                 
-                // Check if we've reached max iterations before continuing
-                if (currentTurnState.IterationCount >= currentTurnState.MaxIterations)
+                // Check if we've reached max iterations before continuing (only for old logic)
+                if (!currentTurnState.UseCustomStopLogic && currentTurnState.IterationCount >= currentTurnState.MaxIterations)
                 {
                     if (enableDebugLogs)
                         Debug.Log($"Cannot continue - reached maximum iterations ({currentTurnState.MaxIterations}). Ending turn.");
@@ -428,7 +485,8 @@ public class AITurnExecutor : MonoBehaviour
                 yield return new WaitForSeconds(continueDecisionDelay);
                 
                 // Generate fresh dice for next iteration
-                currentTurnState.CurrentDice = diceGenerator.GenerateRandomDice(6);
+                bool useRiggedDice = !currentTurnState.UseCustomStopLogic;
+                currentTurnState.CurrentDice = diceGenerator.GenerateRandomDice(6, useRiggedDice);
                 
                 // Log fresh dice to action log
                 if (actionLog != null)
@@ -538,6 +596,33 @@ public class AITurnExecutor : MonoBehaviour
             );
         }
         
+        // Step 7.5: Check if AI has reached victory condition (for both logic systems)
+        int victoryScore = gameTurnManager != null ? gameTurnManager.victoryScore : 5000;
+        int aiGameScore = gameTurnManager != null ? gameTurnManager.aiScore : 0;
+        int aiAccumulatedPoints = aiGameScore + currentTurnState.CurrentTurnScore;
+        
+        if (aiAccumulatedPoints >= victoryScore)
+        {
+            if (enableDebugLogs)
+            {
+                Debug.Log($"=== VICTORY CONDITION MET ===");
+                Debug.Log($"AI Accumulated Points: {aiAccumulatedPoints} >= Victory Score: {victoryScore}");
+                Debug.Log($"Stopping immediately to win the game!");
+            }
+            
+            // Log victory decision to action log
+            if (actionLog != null)
+            {
+                actionLog.LogAIDecision(false, $"Victory! Reached {aiAccumulatedPoints} points");
+            }
+            
+            yield return new WaitForSeconds(continueDecisionDelay);
+            
+            // End the turn immediately - AI wins!
+            isTurnActive = false;
+            yield break;
+        }
+        
         if (allDiceUsed)
         {
             if (enableDebugLogs)
@@ -545,16 +630,42 @@ public class AITurnExecutor : MonoBehaviour
             yield break; // Exit this combination step, parent will handle hot streak decision
         }
         
-        // Step 8: AI automatically continues (no stop decision during iteration)
+        // Step 8: Check stop decision based on which logic system is active
+        if (currentTurnState.UseCustomStopLogic)
+        {
+            // Use custom stop logic
+            var customStopDecision = MakeCustomStopDecision(diceRemaining);
+            
+            if (customStopDecision.ShouldStop)
+            {
+                if (enableDebugLogs)
+                    Debug.Log($"AI decides to STOP mid-iteration: {customStopDecision.DecisionReason}");
+                
+                // Log stop decision to action log
+                if (actionLog != null)
+                {
+                    actionLog.LogAIDecision(false, customStopDecision.DecisionReason);
+                }
+                
+                yield return new WaitForSeconds(continueDecisionDelay);
+                
+                // End the turn - bank the points
+                isTurnActive = false;
+                yield break;
+            }
+        }
+        // If using old logic, no mid-iteration stops (only after hot streaks)
+        
+        // Step 9: AI continues with remaining dice
         if (enableDebugLogs)
             Debug.Log($"AI continues with {diceRemaining} dice remaining...");
         
         yield return new WaitForSeconds(continueDecisionDelay);
         
-        // Step 9: Generate new dice for remaining positions
+        // Step 10: Generate new dice for remaining positions
         RegenerateRemainingDice();
         
-        // Step 10: Update visual dice after reroll
+        // Step 11: Update visual dice after reroll
         if (diceController != null)
         {
             if (enableDebugLogs)
@@ -568,7 +679,7 @@ public class AITurnExecutor : MonoBehaviour
             diceController.SpawnAIDice(currentTurnState.CurrentDice);
         }
         
-        // Step 11: Final delay before next combination step
+        // Step 12: Final delay before next combination step
         if (enableDebugLogs)
             Debug.Log($"Combination step complete. Continuing iteration {currentTurnState.IterationCount}...");
         yield return new WaitForSeconds(stepCompleteDelay);
@@ -690,6 +801,155 @@ public class AITurnExecutor : MonoBehaviour
         return stopDecision;
     }
     
+    /// <summary>
+    /// Custom stop decision based on remaining dice count and game state
+    /// Called after processing a combination to decide if AI should stop mid-iteration
+    /// </summary>
+    AIStopDecision MakeCustomStopDecision(int remainingDiceCount)
+    {
+        // Get game scores
+        int playerTotalScore = gameTurnManager != null ? gameTurnManager.playerScore : 0;
+        int aiGameScore = gameTurnManager != null ? gameTurnManager.aiScore : 0;
+        
+        // Use turn score for stop decisions (not accumulated)
+        int aiTurnScore = currentTurnState.CurrentTurnScore;
+        int aiAccumulatedPoints = aiGameScore + aiTurnScore;
+        int scoreDifference = aiAccumulatedPoints - playerTotalScore;
+        
+        if (enableDebugLogs)
+        {
+            Debug.Log($"=== CUSTOM STOP DECISION ===");
+            Debug.Log($"Player Total Score: {playerTotalScore}");
+            Debug.Log($"AI Game Score: {aiGameScore}");
+            Debug.Log($"AI Turn Score: {aiTurnScore}");
+            Debug.Log($"AI Accumulated Points: {aiAccumulatedPoints} (game + turn)");
+            Debug.Log($"Score Difference: {scoreDifference} (AI accumulated - Player)");
+            Debug.Log($"Remaining Dice: {remainingDiceCount}");
+        }
+        
+        // CUSTOM LOGIC: Stop decision based on remaining dice and TURN SCORE
+        
+        // 1. If >4 dice remaining, never stop (continue iteration)
+        if (remainingDiceCount > 4)
+        {
+            if (enableDebugLogs)
+                Debug.Log("Decision: CONTINUE (>4 dice remaining - never stop mid-iteration)");
+            return new AIStopDecision 
+            { 
+                ShouldStop = false, 
+                DecisionReason = ">4 dice remaining - continue iteration" 
+            };
+        }
+        
+        // 2. If 1 dice left, always stop
+        if (remainingDiceCount == 1)
+        {
+            if (enableDebugLogs)
+                Debug.Log("Decision: STOP (1 dice left - always bank points)");
+            return new AIStopDecision 
+            { 
+                ShouldStop = true, 
+                DecisionReason = "1 dice left - banking points" 
+            };
+        }
+        
+        // 3. If 3 dice left
+        if (remainingDiceCount == 3)
+        {
+            bool isLeading = scoreDifference > 300;
+            bool isEqual = scoreDifference >= -300 && scoreDifference <= 300;
+            bool isLosing = scoreDifference < -300;
+            
+            if (isLeading && aiTurnScore > 3500)
+            {
+                if (enableDebugLogs)
+                    Debug.Log($"Decision: STOP (3 dice, leading by {scoreDifference}, turn score {aiTurnScore} points)");
+                return new AIStopDecision 
+                { 
+                    ShouldStop = true, 
+                    DecisionReason = $"3 dice left, leading with {aiTurnScore} turn points" 
+                };
+            }
+            else if (isEqual && aiTurnScore > 1300)
+            {
+                if (enableDebugLogs)
+                    Debug.Log($"Decision: STOP (3 dice, equal game, turn score {aiTurnScore} points)");
+                return new AIStopDecision 
+                { 
+                    ShouldStop = true, 
+                    DecisionReason = $"3 dice left, equal game with {aiTurnScore} turn points" 
+                };
+            }
+            else if (isLosing && aiTurnScore > 2500)
+            {
+                if (enableDebugLogs)
+                    Debug.Log($"Decision: STOP (3 dice, losing by {-scoreDifference}, turn score {aiTurnScore} points)");
+                return new AIStopDecision 
+                { 
+                    ShouldStop = true, 
+                    DecisionReason = $"3 dice left, losing but have {aiTurnScore} turn points" 
+                };
+            }
+            else
+            {
+                if (enableDebugLogs)
+                    Debug.Log($"Decision: CONTINUE (3 dice, conditions not met for stopping)");
+                return new AIStopDecision 
+                { 
+                    ShouldStop = false, 
+                    DecisionReason = "3 dice left, need more points" 
+                };
+            }
+        }
+        
+        // 4. If 2 dice left
+        if (remainingDiceCount == 2)
+        {
+            bool isNotLosing = scoreDifference >= -300;
+            bool isLosing = scoreDifference < -300;
+            
+            if (aiTurnScore > 550 && isNotLosing)
+            {
+                if (enableDebugLogs)
+                    Debug.Log($"Decision: STOP (2 dice, turn score {aiTurnScore} points and not losing)");
+                return new AIStopDecision 
+                { 
+                    ShouldStop = true, 
+                    DecisionReason = $"2 dice left, have {aiTurnScore} turn points and not losing" 
+                };
+            }
+            else if (aiTurnScore > 1000 && isLosing)
+            {
+                if (enableDebugLogs)
+                    Debug.Log($"Decision: STOP (2 dice, turn score {aiTurnScore} points despite losing)");
+                return new AIStopDecision 
+                { 
+                    ShouldStop = true, 
+                    DecisionReason = $"2 dice left, have {aiTurnScore} turn points" 
+                };
+            }
+            else
+            {
+                if (enableDebugLogs)
+                    Debug.Log($"Decision: CONTINUE (2 dice, conditions not met for stopping)");
+                return new AIStopDecision 
+                { 
+                    ShouldStop = false, 
+                    DecisionReason = "2 dice left, need more points" 
+                };
+            }
+        }
+        
+        // Default: continue (shouldn't reach here with current logic)
+        if (enableDebugLogs)
+            Debug.Log($"Decision: CONTINUE (default fallback)");
+        return new AIStopDecision 
+        { 
+            ShouldStop = false, 
+            DecisionReason = "Default - continue" 
+        };
+    }
+    
     void RemoveUsedDice(List<int> usedDice)
     {
         // Remove dice values from current dice list
@@ -745,7 +1005,12 @@ public class AITurnExecutor : MonoBehaviour
         int remainingCount = GetRemainingDiceCount();
         if (remainingCount > 0)
         {
-            var newDice = diceGenerator.GenerateRandomDice(remainingCount);
+            bool useRiggedDice = !currentTurnState.UseCustomStopLogic;
+            
+            if (enableDebugLogs)
+                Debug.Log($"🎲 RegenerateRemainingDice: count={remainingCount}, UseCustomLogic={currentTurnState.UseCustomStopLogic}, useRiggedDice={useRiggedDice}");
+            
+            var newDice = diceGenerator.GenerateRandomDice(remainingCount, useRiggedDice);
             currentTurnState.CurrentDice = newDice;
             
             if (enableDebugLogs)

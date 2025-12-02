@@ -24,7 +24,7 @@ public class TurnScoreManager : MonoBehaviour
 {
     [Header("Score Settings")]
     public float baseTurnMultiplier = 1f;
-    public float consecutiveTurnBonus = 0.1f; // +10% per consecutive successful turn
+    public float consecutiveTurnBonus = 0f; // Disabled - no bonus for consecutive turns
     public int minimumScoreThreshold = 50; // Minimum score to get bonuses
     
     [Header("Current Turn")]

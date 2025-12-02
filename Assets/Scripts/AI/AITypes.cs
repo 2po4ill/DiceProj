@@ -27,6 +27,7 @@ namespace HybridEnemyAI
         [Header("AI Behavior")]
         public BehaviorMode CurrentMode = BehaviorMode.AGGRESSIVE;
         public int SuccessfulCombinationsCount = 0; // For momentum calculation
+        public bool UseCustomStopLogic = false; // Flag to determine which stop logic system to use
         
         [Header("Dice State")]
         public List<int> CurrentDice = new List<int>();
@@ -49,6 +50,7 @@ namespace HybridEnemyAI
             CurrentMomentumStopChance = 0f;
             CurrentCapStopChance = 0f;
             CombinedStopChance = 0f;
+            UseCustomStopLogic = false;
         }
         
         public void AddCombination(CombinationResult combination)

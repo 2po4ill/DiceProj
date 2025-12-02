@@ -1267,6 +1267,7 @@ MonoBehaviour:
   scoreManager: {fileID: 1948512353}
   combinationDetector: {fileID: 1948512349}
   diceController: {fileID: 1948512347}
+  gameTurnManager: {fileID: 0}
   actionLog: {fileID: 1820751717}
   aiConfig:
     PointsCapAggressive: 2500
@@ -1323,6 +1324,7 @@ MonoBehaviour:
     MaxIterations: 5
     CurrentMode: 0
     SuccessfulCombinationsCount: 0
+    UseCustomStopLogic: 0
     CurrentDice: 
     CompletedCombinations: []
     ZonkProbability: 0
@@ -1424,6 +1426,7 @@ MonoBehaviour:
         MaxIterations: 5
         CurrentMode: 0
         SuccessfulCombinationsCount: 0
+        UseCustomStopLogic: 0
         CurrentDice: 
         CompletedCombinations: []
         ZonkProbability: 0
@@ -3911,7 +3914,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9610207e4d417204eb61c500abbfb30e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HybridEnemyAI.AIDiceGenerator
-  enableDebugLogs: 0
+  enableDebugLogs: 1
   validateDistribution: 1
   enableRiggedDice: 1
   fourDiceComboProbability: 0.5
@@ -4662,7 +4665,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TurnScoreManager
   baseTurnMultiplier: 1
-  consecutiveTurnBonus: 0.1
+  consecutiveTurnBonus: 0
   minimumScoreThreshold: 50
   currentTurn:
     turnNumber: 0
