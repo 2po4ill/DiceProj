@@ -173,15 +173,17 @@ public class AITurnExecutor : MonoBehaviour
         int aiGameScore = gameTurnManager != null ? gameTurnManager.aiScore : 0;
         int scoreDifference = aiGameScore - playerTotalScore;
         
-        bool playerLeadingByMuch = scoreDifference < -2500; // Player leading by >2500
+        bool playerLeadingByMuch = scoreDifference < -5000; // Player leading by >5000
         bool playerHasHighScore = playerTotalScore > 8000;
         
         // Use custom logic unless player is dominating
         currentTurnState.UseCustomStopLogic = !(playerLeadingByMuch || playerHasHighScore);
         
-        // Log AI mode to action log
+        // Log turn separator and AI mode to action log
         if (actionLog != null)
         {
+            actionLog.LogAITurnStart(turnNumber);
+            
             if (currentTurnState.UseCustomStopLogic)
             {
                 actionLog.LogAIAction("ИИ в пассивном режиме");
@@ -693,11 +695,37 @@ public class AITurnExecutor : MonoBehaviour
         if (availableCombinations.Count == 0)
             return null;
         
-        // Select combination based on current behavior mode and iteration
+        int remainingDiceCount = GetRemainingDiceCount();
+        
+        // CUSTOM LOGIC OVERRIDE: When far behind with 3 dice, pick highest points
+        if (currentTurnState.UseCustomStopLogic && remainingDiceCount == 3)
+        {
+            int playerTotalScore = gameTurnManager != null ? gameTurnManager.playerScore : 0;
+            int aiGameScore = gameTurnManager != null ? gameTurnManager.aiScore : 0;
+            int aiAccumulatedPoints = aiGameScore + currentTurnState.CurrentTurnScore;
+            bool playerLeadingByMuch = (playerTotalScore - aiAccumulatedPoints) > 3000;
+            
+            if (playerLeadingByMuch)
+            {
+                // Override strategy: pick highest points combination
+                var highestPointsCombination = availableCombinations.OrderByDescending(c => c.points).First();
+                
+                if (enableDebugLogs)
+                {
+                    Debug.Log($"🎯 OVERRIDE: Player leading by {playerTotalScore - aiAccumulatedPoints}, picking highest points with 3 dice");
+                    Debug.Log($"Selected Combination: {highestPointsCombination.rule} - {highestPointsCombination.description}");
+                    Debug.Log($"Points: {highestPointsCombination.points}, Dice Used: {GetDiceUsedForCombination(highestPointsCombination.rule)}");
+                }
+                
+                return highestPointsCombination;
+            }
+        }
+        
+        // Normal strategy selection
         var selectedCombination = combinationStrategy.SelectOptimalCombination(
             availableCombinations, 
             currentTurnState.CurrentMode,
-            GetRemainingDiceCount(),
+            remainingDiceCount,
             currentTurnState.IterationCount
         );
         
@@ -841,11 +869,25 @@ public class AITurnExecutor : MonoBehaviour
             };
         }
         
-        // 2. If 1 dice left, always stop
+        // 2. If 1 dice left
         if (remainingDiceCount == 1)
         {
+            // Exception: if player is leading by >3000, take the risk and roll
+            bool playerLeadingByMuch = (playerTotalScore - aiAccumulatedPoints) > 3000;
+            
+            if (playerLeadingByMuch)
+            {
+                if (enableDebugLogs)
+                    Debug.Log($"Decision: CONTINUE (1 dice left but player leading by {playerTotalScore - aiAccumulatedPoints} - taking risk)");
+                return new AIStopDecision 
+                { 
+                    ShouldStop = false, 
+                    DecisionReason = "1 dice left, player leading by >3000 - taking risk" 
+                };
+            }
+            
             if (enableDebugLogs)
-                Debug.Log("Decision: STOP (1 dice left - always bank points)");
+                Debug.Log("Decision: STOP (1 dice left - banking points)");
             return new AIStopDecision 
             { 
                 ShouldStop = true, 
@@ -856,9 +898,9 @@ public class AITurnExecutor : MonoBehaviour
         // 3. If 3 dice left
         if (remainingDiceCount == 3)
         {
-            bool isLeading = scoreDifference > 300;
-            bool isEqual = scoreDifference >= -300 && scoreDifference <= 300;
-            bool isLosing = scoreDifference < -300;
+            bool isLeading = scoreDifference > 1500;
+            bool isEqual = scoreDifference >= -1500 && scoreDifference <= 1500;
+            bool isLosing = scoreDifference < -1500;
             
             if (isLeading && aiTurnScore > 3500)
             {
@@ -905,8 +947,8 @@ public class AITurnExecutor : MonoBehaviour
         // 4. If 2 dice left
         if (remainingDiceCount == 2)
         {
-            bool isNotLosing = scoreDifference >= -300;
-            bool isLosing = scoreDifference < -300;
+            bool isNotLosing = scoreDifference >= -1500;
+            bool isLosing = scoreDifference < -1500;
             
             if (aiTurnScore > 550 && isNotLosing)
             {

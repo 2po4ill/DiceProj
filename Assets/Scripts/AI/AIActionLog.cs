@@ -103,7 +103,7 @@ public class AIActionLog : MonoBehaviour
     /// </summary>
     public void LogAITurnStart(int turnNumber)
     {
-        LogSystem($"=== AI Turn {turnNumber} ===");
+        LogSystem($"------ Turn {turnNumber} ------");
     }
     
     /// <summary>
@@ -155,7 +155,7 @@ public class AIActionLog : MonoBehaviour
     public void LogAITurnEnd(int totalPoints, int iterations)
     {
         LogAIAction($"Turn complete: {totalPoints} points ({iterations} iterations)");
-        LogSystem("---");
+        LogSystem("--------------------");
     }
     
     /// <summary>
